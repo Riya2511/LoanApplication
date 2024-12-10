@@ -83,7 +83,7 @@ class RegisterCustomerPage(StyledWidget):
 
         # Phone validation
         phone = self.phone_input.text().strip()
-        phone_regex = r'^\+?1?\d{10,12}$'
+        phone_regex = r'^\d{10}$'
         if not phone:
             self.phone_error.setText("Phone is required")
             is_valid = False

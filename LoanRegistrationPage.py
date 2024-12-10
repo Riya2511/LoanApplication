@@ -55,10 +55,6 @@ class LoanRegistrationPage(StyledWidget):
         self.asset_weight_input.setPlaceholderText("Enter Asset Weight (kg)")
         loan_form_layout.addRow("Asset Weight (kg):", self.asset_weight_input)
         
-        self.asset_value_input = QLineEdit()
-        self.asset_value_input.setPlaceholderText("Enter Asset Estimated Value (₹)")
-        loan_form_layout.addRow("Asset Estimated Value (₹):", self.asset_value_input)
-        
         self.register_loan_btn = QPushButton("Register Loan")
         self.register_loan_btn.clicked.connect(self.register_loan)
         loan_form_layout.addRow(self.register_loan_btn)
@@ -81,7 +77,7 @@ class LoanRegistrationPage(StyledWidget):
         customers = DatabaseManager.get_all_customers()
         if customers:
             for customer_id, name, account_number in customers:
-                self.customer_dropdown.addItem(f"{name} ({account_number})", customer_id)
+                self.customer_dropdown.addItem(f"{name}", customer_id)
         else:
             self.customer_dropdown.addItem("No customers found")
 
@@ -119,11 +115,10 @@ class LoanRegistrationPage(StyledWidget):
             interest_amount = float(self.interest_amount_input.text())
             asset_description = self.asset_description_input.text().strip()
             asset_weight = float(self.asset_weight_input.text())
-            asset_value = float(self.asset_value_input.text())
 
             if not asset_description:
                 raise ValueError("Asset description cannot be empty.")
-            if loan_amount <= 0 or interest_amount <= 0 or asset_weight <= 0 or asset_value <= 0:
+            if loan_amount <= 0 or interest_amount <= 0 or asset_weight <= 0:
                 raise ValueError("All numeric values must be positive.")
         except ValueError as e:
             QMessageBox.warning(self, "Input Error", str(e))
@@ -138,7 +133,7 @@ class LoanRegistrationPage(StyledWidget):
                 self.selected_customer_id, loan_amount, interest_amount
             )
             DatabaseManager.insert_asset(
-                loan_id, asset_description, asset_weight, asset_value
+                loan_id, asset_description, asset_weight
             )
             QMessageBox.information(self, "Success", "Loan registered successfully!")
             self.reset_form()
@@ -151,4 +146,3 @@ class LoanRegistrationPage(StyledWidget):
         self.interest_amount_input.clear()
         self.asset_description_input.clear()
         self.asset_weight_input.clear()
-        self.asset_value_input.clear()

@@ -39,7 +39,6 @@ class DatabaseManager:
                     loan_id INTEGER NOT NULL,
                     description TEXT NOT NULL,
                     weight DECIMAL(10, 2) NOT NULL,
-                    estimated_value DECIMAL(10, 2),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (loan_id) REFERENCES Loans(loan_id)
@@ -52,10 +51,25 @@ class DatabaseManager:
                     loan_id INTEGER NOT NULL,
                     payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     payment_amount DECIMAL(10, 2) NOT NULL,
+                    amount_left DECIMAL(10, 2) NOT NULL,
                     FOREIGN KEY (loan_id) REFERENCES Loans(loan_id)
                 );
             ''')
             
+            cursor.execute('''
+                CREATE VIEW IF NOT EXISTS LoanView AS
+                    SELECT
+                        Loans.created_at AS loan_date,
+                        IFNULL(Assets.description, 'N/A') AS asset_description,
+                        IFNULL(Assets.weight, 0) AS asset_weight,
+                        (Loans.loan_amount + Loans.interest_amount) AS total_loan_amount,
+                        Loans.interest_amount,
+                        (Loans.loan_amount + Loans.interest_amount - Loans.loan_amount_paid) AS loan_amount_due,
+                        Loans.loan_id AS loan_id,
+                        Loans.customer_id AS customer_id
+                    FROM Loans
+                    LEFT JOIN Assets ON Loans.loan_id = Assets.loan_id;
+            ''')
             conn.commit()
         except sqlite3.Error as e:
             print(f"Database initialization error: {e}")
@@ -147,36 +161,40 @@ class DatabaseManager:
             conn.close()
 
     @staticmethod
-    def insert_asset(loan_id, description, weight, estimated_value):
+    def insert_asset(loan_id, description, weight):
         """Insert a new asset associated with a loan"""
         query = """
         INSERT INTO Assets 
-        (loan_id, description, weight, estimated_value) 
-        VALUES (?, ?, ?, ?)
+        (loan_id, description, weight) 
+        VALUES (?, ?, ?)
         """
         conn = DatabaseManager.create_connection()
         try:
             cursor = conn.cursor()
-            cursor.execute(query, (loan_id, description, weight, estimated_value))
+            cursor.execute(query, (loan_id, description, weight))
             conn.commit()
             return cursor.lastrowid
         finally:
             conn.close()
 
     @staticmethod
-    def insert_loan_payment(loan_id, payment_amount, payment_date):
-        """Insert a new loan payment"""
+    def insert_loan_payment(loan_id, payment_amount, amount_left):
+        """Insert a new loan payment into the LoanPayments table."""
         query = """
-        INSERT INTO LoanPayments (loan_id, payment_amount, payment_date)
-        VALUES (?, ?, ?)
+        INSERT INTO LoanPayments (loan_id, payment_amount, amount_left, payment_date)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
         """
         conn = DatabaseManager.create_connection()
         try:
             cursor = conn.cursor()
-            cursor.execute(query, (loan_id, payment_amount, payment_date))
+            cursor.execute(query, (loan_id, payment_amount, amount_left))
             conn.commit()
+        except sqlite3.Error as e:
+            print(f"Database error during payment insertion: {e}")
+            raise
         finally:
             conn.close()
+
 
     @classmethod
     def update_loan_payment(cls, loan_id, amount_paid):
@@ -249,19 +267,10 @@ class DatabaseManager:
     def fetch_loans_for_customer(customer_id):
         """
         Fetch all loans for a specific customer, including loan date,
-        asset description, asset weight, and total loan amount to be paid.
+        asset description, asset weight, total loan amount, and due amount.
         """
         query = """
-        SELECT
-            Loans.created_at AS loan_date,
-            Assets.description AS asset_description,
-            Assets.weight AS asset_weight,
-            (Loans.loan_amount + Loans.interest_amount - Loans.loan_amount_paid) AS loan_amount_due,
-            Loans.loan_id AS loan_id
-        FROM Loans
-        LEFT JOIN Assets ON Loans.loan_id = Assets.loan_id
-        WHERE Loans.customer_id = ?
-        ORDER BY Loans.created_at DESC
+            SELECT * FROM LoanView WHERE customer_id = ?;
         """
         try:
             return DatabaseManager.fetch_data(query, (customer_id,))
@@ -311,12 +320,18 @@ class DatabaseManager:
     def fetch_loan_payments(loan_id):
         """Fetch all payments made for a given loan."""
         query = """
-        SELECT payment_date, payment_amount
+        SELECT payment_date, payment_amount, amount_left
         FROM LoanPayments
         WHERE loan_id = ?
         ORDER BY payment_date ASC
         """
-        return DatabaseManager.fetch_data(query, (loan_id,))
+        results = DatabaseManager.fetch_data(query, (loan_id,))
+        # Convert results to a list of dictionaries
+        return [
+            {"payment_date": result[0], "payment_amount": result[1], "amount_left": result[2]}
+            for result in results
+        ]
+
 
     @staticmethod
     def fetch_loans_for_customer(customer_id):

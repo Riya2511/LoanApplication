@@ -6,10 +6,11 @@ from PyQt5.QtWidgets import (
 )
 from helper import StyledWidget
 from DatabaseManager import DatabaseManager
+from datetime import datetime
 
 class LoanUpdatePage(StyledWidget):
     def __init__(self, parent, switch_page_callback):
-        super().__init__(parent, with_back_button=True, title="Update Loan", switch_page_callback=switch_page_callback)
+        super().__init__(parent, with_back_button=True, title="Repay Loan", switch_page_callback=switch_page_callback)
         self.selected_customer_id = None
         self.customer_info_group = None
         self.update_group = None
@@ -27,15 +28,25 @@ class LoanUpdatePage(StyledWidget):
 
         # Customer Information Group Box
         self.customer_info_group = QGroupBox("Customer Information")
+        self.customer_info_group.setStyleSheet("""
+            QGroupBox {
+                border: 1px solid #d3d3d3;
+                border-radius: 5px;
+                margin-top: 10px;
+                margin-bottom: 10px;
+                padding-top: 20px;
+                background-color: white;
+            }
+        """)
         customer_info_layout = QVBoxLayout()
         self.customer_info_group.setLayout(customer_info_layout)
         self.content_layout.addWidget(self.customer_info_group)
 
         # Loan Table Section
         self.loan_table = QTableWidget()
-        self.loan_table.setColumnCount(5)
+        self.loan_table.setColumnCount(7)
         self.loan_table.setHorizontalHeaderLabels(
-            ["Loan Date", "Asset Description", "Asset Weight (kg)", "Loan Amount (₹)", "Update"]
+            ["Loan Date", "Asset Description", "Asset Weight (kg)", "Total Loan Amount (₹)", "Interest Amount (₹)", "Amount Paid (₹)",  ""]
         )
         self.loan_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.loan_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -109,7 +120,7 @@ class LoanUpdatePage(StyledWidget):
         customers = DatabaseManager.get_all_customers()
         if customers:
             for customer_id, name, account_number in customers:
-                self.customer_dropdown.addItem(f"{name} ({account_number})", customer_id)
+                self.customer_dropdown.addItem(f"{name}", customer_id)
         else:
             self.customer_dropdown.addItem("No customers found")
 
@@ -119,19 +130,41 @@ class LoanUpdatePage(StyledWidget):
             return
 
         self.selected_customer_id = self.customer_dropdown.currentData()
+        self.populate_customer_info()
         self.populate_loans_table()
+
+    def populate_customer_info(self):
+        """Populate customer information in the customer info group."""
+        customer_info = DatabaseManager.get_customer_by_id(self.selected_customer_id)
+        if customer_info:
+            customer_info_layout = self.customer_info_group.layout()
+            for key, value in customer_info.items():
+                label = QLabel(f"{key}: {value}")
+                customer_info_layout.addWidget(label)
 
     def populate_loans_table(self):
         """Populate the loan table with loans for the selected customer."""
         self.loan_table.setRowCount(0)
         loans = DatabaseManager.fetch_loans_for_customer(self.selected_customer_id)
+        print(loans)
         for row_idx, loan in enumerate(loans):
             self.loan_table.insertRow(row_idx)
-            for col_idx, value in enumerate(loan[:-1]):  # Exclude loan ID
+            for col_idx, value in enumerate(loan[:-2]):  # Exclude loan ID (last field)
+                # Format dates, weights, or amounts if needed
+                if col_idx == 0:  # Format loan date
+                    value = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+                    value = value.strftime("%d-%m-%Y %H:%M:%S")
+                elif col_idx in (2, 3, 4, 5):  # Format numerical values
+                    value = f"{float(value):,.2f}" if value else "0.00"
+                
+
                 self.loan_table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
-            update_button = QPushButton("Update")
+
+            # Add "Update Amount" button for each row
+            update_button = QPushButton("Update Amount")
             update_button.clicked.connect(lambda _, loan_id=loan[-1]: self.show_update_section(loan_id))
-            self.loan_table.setCellWidget(row_idx, 4, update_button)
+            self.loan_table.setCellWidget(row_idx, 6, update_button)
+
 
     def show_update_section(self, loan_id):
         """Show the update section with loan details."""
@@ -149,8 +182,11 @@ class LoanUpdatePage(StyledWidget):
             if repayments:
                 for row_idx, repayment in enumerate(repayments):
                     self.repayment_table.insertRow(row_idx)
-                    self.repayment_table.setItem(row_idx, 0, QTableWidgetItem(str(repayment["payment_date"])))
+                    value = datetime.strptime(repayment['payment_date'], "%Y-%m-%d %H:%M:%S")
+                    value = value.strftime("%d-%m-%Y %H:%M:%S")
+                    self.repayment_table.setItem(row_idx, 0, QTableWidgetItem(value))
                     self.repayment_table.setItem(row_idx, 1, QTableWidgetItem(str(repayment["payment_amount"])))
+                    self.repayment_table.setItem(row_idx, 2, QTableWidgetItem(str(repayment["amount_left"])))
                     total_paid += repayment["payment_amount"]
             else:
                 # Handle empty repayment history (no payments)
@@ -161,32 +197,50 @@ class LoanUpdatePage(StyledWidget):
 
             # Calculate remaining amount
             remaining_amount = loan_details["loan_amount_left"] - total_paid
+            if remaining_amount < 0: remaining_amount = 0
             self.loan_amount_left_label.setText(str(remaining_amount))  # Update the remaining amount label
 
     def save_loan_update(self):
         """Validate and save the updated loan information."""
         try:
+            # Step 1: Validate the entered amount
             loan_amount_paid = float(self.loan_amount_paid_input.text())
             if loan_amount_paid <= 0:
                 raise ValueError("Loan Amount Paid must be positive.")
 
-            # Step 1: Insert the payment into the LoanPayments table
-            payment_date = "CURRENT_TIMESTAMP"  # We'll use the current timestamp for the payment
+            # Step 2: Fetch current loan details
+            loan_details = DatabaseManager.fetch_loan_details(self.current_loan_id)
+            if not loan_details:
+                raise ValueError("Loan details not found.")
+
+            loan_amount_left = loan_details["loan_amount_left"]
+            new_amount_left = loan_amount_left - loan_amount_paid
+
+            # Step 3: Prevent repayment if it results in a negative amount left
+            if new_amount_left < 0:
+                raise ValueError(
+                    f"Payment exceeds the pending loan amount.\n"
+                    f"Pending Amount: ₹{loan_amount_left:.2f}, Attempted Payment: ₹{loan_amount_paid:.2f}"
+                )
+
+            # Step 4: Insert payment into LoanPayments table
             DatabaseManager.insert_loan_payment(
                 loan_id=self.current_loan_id,
                 payment_amount=loan_amount_paid,
-                payment_date=payment_date
+                amount_left=new_amount_left
             )
 
-            # Step 2: Update the loan's amount paid in Loans table
+            # Step 5: Update the loan's amount paid in Loans table
             DatabaseManager.update_loan_payment(
                 loan_id=self.current_loan_id,
                 amount_paid=loan_amount_paid
             )
 
+            # Step 6: Inform the user and refresh the UI
             QMessageBox.information(self, "Success", "Loan payment updated successfully!")
             self.cancel_update()  # Hide the update section
             self.populate_loans_table()  # Refresh table
+
         except ValueError as e:
             QMessageBox.warning(self, "Input Error", str(e))
         except Exception as e:
