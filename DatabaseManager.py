@@ -338,17 +338,7 @@ class DatabaseManager:
         """Fetch all loans for a specific customer, including loan date, asset description, 
         asset weight, loan amount, paid amount, and pending amount."""
         query = """
-        SELECT 
-            Loans.created_at AS loan_date,
-            Assets.description AS asset_description,
-            Assets.weight AS asset_weight,
-            Loans.loan_amount AS loan_amount,
-            Loans.loan_amount_paid AS loan_amount_paid,
-            (Loans.loan_amount + Loans.interest_amount - Loans.loan_amount_paid) AS loan_amount_left,
-            Loans.loan_id AS loan_id
-        FROM Loans
-        LEFT JOIN Assets ON Loans.loan_id = Assets.loan_id
+        SELECT * from LoanView
         WHERE Loans.customer_id = ?
-        ORDER BY Loans.created_at DESC
         """
         return DatabaseManager.fetch_data(query, (customer_id,))
