@@ -317,7 +317,6 @@ class DatabaseManager:
         ORDER BY payment_date ASC
         """
         results = DatabaseManager.fetch_data(query, (loan_id,))
-        print(results, loan_id)
         return [
             {"payment_date": result[0], "payment_amount": result[1], "amount_left": result[2]}
             for result in results
