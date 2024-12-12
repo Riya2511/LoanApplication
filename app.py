@@ -6,6 +6,7 @@ from RegisterCustomerPage import RegisterCustomerPage
 from LoanRegistrationPage import LoanRegistrationPage
 from LoanUpdatePage import LoanUpdatePage
 from GenerateReport import GenerateReport
+from helper import verifyPendrive
 
 class MainWindow(QWidget):
     def __init__(self):
@@ -38,6 +39,8 @@ class MainWindow(QWidget):
         self.stacked_widget.setCurrentIndex(index)
 
 def main():
+    if not verifyPendrive():
+        exit()
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
