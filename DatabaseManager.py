@@ -63,8 +63,8 @@ class DatabaseManager:
                         IFNULL(Assets.description, 'N/A') AS asset_description,
                         IFNULL(Assets.weight, 0) AS asset_weight,
                         (Loans.loan_amount + Loans.interest_amount) AS total_loan_amount,
-                        Loans.interest_amount,
                         (Loans.loan_amount + Loans.interest_amount - Loans.loan_amount_paid) AS loan_amount_due,
+                        Loans.interest_amount,
                         Loans.loan_id AS loan_id,
                         Loans.customer_id AS customer_id
                     FROM Loans
@@ -326,19 +326,9 @@ class DatabaseManager:
         ORDER BY payment_date ASC
         """
         results = DatabaseManager.fetch_data(query, (loan_id,))
+        print(results, loan_id)
         # Convert results to a list of dictionaries
         return [
             {"payment_date": result[0], "payment_amount": result[1], "amount_left": result[2]}
             for result in results
         ]
-
-
-    @staticmethod
-    def fetch_loans_for_customer(customer_id):
-        """Fetch all loans for a specific customer, including loan date, asset description, 
-        asset weight, loan amount, paid amount, and pending amount."""
-        query = """
-        SELECT * from LoanView
-        WHERE Loans.customer_id = ?
-        """
-        return DatabaseManager.fetch_data(query, (customer_id,))
