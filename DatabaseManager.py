@@ -136,7 +136,6 @@ class DatabaseManager:
         FROM Customers 
         WHERE customer_id = ?
         """
-        # Use fetch_data for consistency
         customer = DatabaseManager.fetch_data(query, (customer_id,))
         if customer:
             columns = ['customer_id', 'name', 'account_number', 'phone', 'address']
@@ -212,7 +211,6 @@ class DatabaseManager:
         conn = cls.create_connection()
         try:
             cursor = conn.cursor()
-            # Fetch current loan details
             cursor.execute(query_fetch, (loan_id,))
             loan = cursor.fetchone()
             
@@ -225,11 +223,7 @@ class DatabaseManager:
 
             if new_paid_amount > total_due:
                 raise ValueError("Payment exceeds total due amount.")
-
-            # Determine new loan status
             loan_status = "Completed" if new_paid_amount == total_due else "Pending"
-
-            # Update the loan
             cursor.execute(query_update, (new_paid_amount, loan_status, loan_id))
             conn.commit()
         except sqlite3.Error as e:
@@ -252,9 +246,7 @@ class DatabaseManager:
         conn = cls.create_connection()
         try:
             cursor = conn.cursor()
-            # Delete assets associated with the loan
             cursor.execute(query_delete_assets, (loan_id,))
-            # Delete the loan
             cursor.execute(query_delete_loan, (loan_id,))
             conn.commit()
         except sqlite3.Error as e:
@@ -298,7 +290,6 @@ class DatabaseManager:
         try:
             result = DatabaseManager.fetch_data(query, (loan_id,))
             if result:
-                # Return the first record as a dictionary
                 columns = ["asset_description", "asset_weight", "loan_amount_left"]
                 return dict(zip(columns, result[0]))
             return None
@@ -327,7 +318,6 @@ class DatabaseManager:
         """
         results = DatabaseManager.fetch_data(query, (loan_id,))
         print(results, loan_id)
-        # Convert results to a list of dictionaries
         return [
             {"payment_date": result[0], "payment_amount": result[1], "amount_left": result[2]}
             for result in results
