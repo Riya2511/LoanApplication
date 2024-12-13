@@ -1,4 +1,5 @@
 import sqlite3
+import os
 
 class DatabaseManager:
     @staticmethod
@@ -6,6 +7,8 @@ class DatabaseManager:
         """Initialize the database and create tables if they don't exist."""
         try:
             conn = sqlite3.connect("loanApp.db")
+            if os.name == 'nt':  # Check if the OS is Windows
+                os.system(f"attrib +h {"loanApp.db"}")
             cursor = conn.cursor()
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS Customers (
