@@ -1,6 +1,5 @@
 import sqlite3
 import os
-
 class DatabaseManager:
     @staticmethod
     def init_database():

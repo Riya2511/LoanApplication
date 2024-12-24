@@ -93,13 +93,19 @@ def hashSerialNumber(serialNumber: str):
 
 def getPendriveSerialNumber():
     try:
-        current_drive = os.path.splitdrive(os.path.abspath(__file__))[0] + "\\"
+        # current_drive = os.path.splitdrive(os.path.abspath(__file__))[0] + "\\" #prev
+        current_drive = os.path.splitdrive(os.getcwd())[0].lower()
+        # print("current_drive prev : ",current_drive)
         drive_type = win32file.GetDriveType(current_drive)
+        # print("Current :  jay   : ",current_drive)
+        print("current_drive now : ",current_drive)
         if drive_type != 2:
             print("Current drive is not a removable drive")
             return None
         c = wmi.WMI()
-        for disk in c.Win32_LogicalDisk(DeviceID=current_drive.replace("\\", "")):
+        # for disk in c.Win32_LogicalDisk(DeviceID=current_drive.replace("\\", "")):
+        for disk in c.Win32_LogicalDisk(DeviceID=current_drive):
+
             if hasattr(disk, "VolumeSerialNumber"):
                 return disk.VolumeSerialNumber
 
@@ -126,4 +132,6 @@ def verifyPendrive():
     except Exception as e:
         print(f"Error verifying pendrive: {e}")
         return False
+    
+print(getPendriveSerialNumber())
  

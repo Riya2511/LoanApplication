@@ -11,10 +11,10 @@ from helper import verifyPendrive
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        DatabaseManager.init_database()
         self.setWindowTitle("Loan Management System")
-        self.resize(800, 600)
+        self.resize(1920, 1080)
         self.init_ui()
+        DatabaseManager.init_database()
 
     def init_ui(self):
         layout = QVBoxLayout()
@@ -40,7 +40,7 @@ class MainWindow(QWidget):
 
 def main():
     if not verifyPendrive():
-        exit()
+        return
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()

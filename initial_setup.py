@@ -49,7 +49,8 @@ def createAuthFile(serialNumber=None):
         
         print("Authentication file created successfully")
         return True
-    
+    except PermissionError:
+        return True
     except Exception as e:
         print(f"Error creating auth file: {e}")
         return False
