@@ -13,8 +13,11 @@ class GenerateReport(StyledWidget):
     def __init__(self, parent, switch_page_callback):
         super().__init__(parent, with_back_button=True, title="Generate Report", switch_page_callback=switch_page_callback)
         self.selected_customer_id = None
+        self.current_loan_id = None
         self.customer_info_group = None
         self.loan_details_table = None
+        self.update_group = None
+        self.assets_table = None
         self.loan_payments_table = None
         self.init_ui()
 
@@ -22,6 +25,7 @@ class GenerateReport(StyledWidget):
         # Customer Selection Section with Search Functionality
         customer_layout = QHBoxLayout()
         self.customer_dropdown = QComboBox()
+        self.customer_dropdown.setFixedWidth(300)
         self.customer_search = QLineEdit()
         self.customer_search.setPlaceholderText("Search Customer")
         self.customer_search.textChanged.connect(self.filter_customers)
@@ -51,35 +55,119 @@ class GenerateReport(StyledWidget):
         self.loan_details_table = QTableWidget()
         self.loan_details_table.setColumnCount(6)
         self.loan_details_table.setHorizontalHeaderLabels(
-            ["Loan Date", "Asset Description", "Asset Weight (kg)", "Total Amount (₹)", "Amount Due (₹)", ""]
+            ["Loan Date", "Total Assets", "Total Weight (g)", "Total Amount (₹)", "Amount Due (₹)", ""]
         )
         self.loan_details_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.loan_details_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.loan_details_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.loan_details_table.setFixedHeight(200)
         self.content_layout.addWidget(self.loan_details_table)
 
-        # Loan Payments Table (initially hidden)
+        # Assets and Payments Section (hidden by default)
+        self.update_group = QGroupBox("Loan Assets and Payments")
+        self.update_group.setVisible(False)
+        update_layout = QVBoxLayout()
+
+        # Assets Table
+        self.assets_table = QTableWidget()
+        self.assets_table.setColumnCount(2)
+        self.assets_table.setHorizontalHeaderLabels(
+            ["Asset Description", "Weight (g)"]
+        )
+        update_layout.addWidget(self.assets_table)
+
+        # Loan Payments Table
+        payments_label = QLabel("Payment History:")
+        update_layout.addWidget(payments_label)
+        
         self.loan_payments_table = QTableWidget()
-        self.loan_payments_table.setColumnCount(3)
+        self.loan_payments_table.setColumnCount(5)
         self.loan_payments_table.setHorizontalHeaderLabels(
-            ["Payment Date", "Amount Paid (₹)", "Remaining Amount (₹)"]
+            ["Payment Date", "Asset", "Amount Paid (₹)", "Interest Paid (₹)", "Remaining (₹)"]
         )
         self.loan_payments_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.loan_payments_table.setVisible(False)
-        self.content_layout.addWidget(self.loan_payments_table)
+        update_layout.addWidget(self.loan_payments_table)
+
+        # Close button
+        button_layout = QHBoxLayout()
+        self.close_button = QPushButton("Close")
+        self.close_button.setFixedWidth(100)
+        self.close_button.setFixedHeight(25)
+        self.close_button.clicked.connect(self.hide_detail_section)
+        self.close_button.setStyleSheet("""
+            QPushButton {
+                background-color: #ff4444;
+                color: white;
+                border-radius: 12px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #ff0000;
+            }
+        """)
+        button_layout.addWidget(self.close_button)
+        update_layout.addLayout(button_layout)
+
+        self.update_group.setLayout(update_layout)
+        self.content_layout.addWidget(self.update_group)
 
         # Buttons for Report Generation
-        button_layout = QHBoxLayout()
+        report_button_layout = QHBoxLayout()
         self.generate_pdf_button = QPushButton("Generate PDF Report")
         self.generate_pdf_button.clicked.connect(self.generate_pdf_report)
-        button_layout.addWidget(self.generate_pdf_button)
-        self.content_layout.addLayout(button_layout)
+        report_button_layout.addWidget(self.generate_pdf_button)
+        self.content_layout.addLayout(report_button_layout)
 
         # Connect dropdown selection
         self.customer_dropdown.currentIndexChanged.connect(self.on_customer_selected)
-        self.loan_details_table.cellClicked.connect(self.show_loan_payments)
 
         self.content_layout.addStretch(1)
+
+    def populate_assets_table(self, loan_id):
+        """Populate assets table with loan assets."""
+        self.assets_table.setRowCount(0)
+        assets = DatabaseManager.fetch_loan_assets(loan_id)
+        
+        for row_idx, (description, weight) in enumerate(assets):
+            self.assets_table.insertRow(row_idx)
+            self.assets_table.setItem(row_idx, 0, QTableWidgetItem(description))
+            self.assets_table.setItem(row_idx, 1, QTableWidgetItem(f"{weight:,.2f}"))
+
+    def populate_loan_payments_table(self, loan_id):
+        """Populate the loan payments table with payment history."""
+        self.loan_payments_table.setRowCount(0)
+        repayments = DatabaseManager.fetch_loan_payments(loan_id)
+        
+        if repayments:
+            for row_idx, repayment in enumerate(repayments):
+                self.loan_payments_table.insertRow(row_idx)
+                
+                payment_date = datetime.strptime(repayment['payment_date'], "%Y-%m-%d %H:%M:%S")
+                formatted_date = payment_date.strftime("%d-%m-%Y %H:%M:%S")
+                
+                self.loan_payments_table.setItem(row_idx, 0, QTableWidgetItem(formatted_date))
+                self.loan_payments_table.setItem(row_idx, 1, QTableWidgetItem(repayment.get("asset_description", "")))
+                self.loan_payments_table.setItem(row_idx, 2, QTableWidgetItem(f"{float(repayment['payment_amount']):,.2f}"))
+                self.loan_payments_table.setItem(row_idx, 3, QTableWidgetItem(f"{float(repayment['interest_amount']):,.2f}"))
+                self.loan_payments_table.setItem(row_idx, 4, QTableWidgetItem(f"{float(repayment['amount_left']):,.2f}"))
+        else:
+            self.loan_payments_table.insertRow(0)
+            self.loan_payments_table.setItem(0, 0, QTableWidgetItem("No payments made"))
+            for i in range(1, 5):
+                self.loan_payments_table.setItem(0, i, QTableWidgetItem("-"))
+
+    def show_loan_details(self, loan_id):
+        """Show the loan details section with assets and payments."""
+        self.current_loan_id = loan_id
+        self.update_group.setVisible(True)
+        
+        self.populate_assets_table(loan_id)
+        self.populate_loan_payments_table(loan_id)
+
+    def hide_detail_section(self):
+        """Hide the loan details section."""
+        self.update_group.setVisible(False)
 
     def showEvent(self, event: QEvent):
         """Handle page load event and refresh customer data."""
@@ -124,7 +212,6 @@ class GenerateReport(StyledWidget):
 
     def populate_customer_info(self):
         """Populate customer information in the customer info group."""
-        # Clear existing labels
         customer_info_layout = self.customer_info_group.layout()
         while customer_info_layout.count():
             child = customer_info_layout.takeAt(0)
@@ -134,6 +221,8 @@ class GenerateReport(StyledWidget):
         customer_info = DatabaseManager.get_customer_by_id(self.selected_customer_id)
         if customer_info:
             for key, value in customer_info.items():
+                if key == "customer_id" or not value:
+                    continue
                 label = QLabel(f"{key.replace('_', ' ').title()}: {value}")
                 customer_info_layout.addWidget(label)
 
@@ -152,33 +241,9 @@ class GenerateReport(StyledWidget):
                     value = f"{float(value):,.2f}" if value else "0.00"
                 self.loan_details_table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
             
-            details_button = QPushButton("Loan Payments")
-            details_button.clicked.connect(lambda _, loan_id=loan[-2]: self.show_loan_payments(row_idx, 5, loan_id))
-            self.loan_details_table.setCellWidget(row_idx, 5, details_button)
-
-    def show_loan_payments(self, row, column, loan_id=None):
-        """Show loan payments for the selected loan."""
-        if not loan_id:
-            loan_id = self.loan_details_table.item(row, 5).data(Qt.UserRole)
-        
-        self.loan_payments_table.setRowCount(0)
-        self.loan_payments_table.setVisible(True)
-        
-        repayments = DatabaseManager.fetch_loan_payments(loan_id)
-        if repayments:
-            for row_idx, repayment in enumerate(repayments):
-                self.loan_payments_table.insertRow(row_idx)
-                value = datetime.strptime(repayment['payment_date'], "%Y-%m-%d %H:%M:%S")
-                value = value.strftime("%d-%m-%Y %H:%M:%S")
-                
-                self.loan_payments_table.setItem(row_idx, 0, QTableWidgetItem(value))
-                self.loan_payments_table.setItem(row_idx, 1, QTableWidgetItem(str(repayment["payment_amount"])))
-                self.loan_payments_table.setItem(row_idx, 2, QTableWidgetItem(str(repayment["amount_left"])))
-        else:
-            self.loan_payments_table.insertRow(0)
-            self.loan_payments_table.setItem(0, 0, QTableWidgetItem("No payments made"))
-            self.loan_payments_table.setItem(0, 1, QTableWidgetItem("0"))
-            self.loan_payments_table.setItem(0, 2, QTableWidgetItem("N/A"))
+            view_button = QPushButton("View More")
+            view_button.clicked.connect(lambda checked, lid=loan[-2]: self.show_loan_details(lid))
+            self.loan_details_table.setCellWidget(row_idx, 5, view_button)
 
     def generate_pdf_report(self):
         """Generate a comprehensive PDF report for the selected customer."""
@@ -187,13 +252,10 @@ class GenerateReport(StyledWidget):
             return
 
         try:
-            # Fetch customer information
             customer_info = DatabaseManager.get_customer_by_id(self.selected_customer_id)
             loans = DatabaseManager.fetch_loans_for_customer(self.selected_customer_id)
 
-            # Create PDF with custom font
             pdf = FPDF()
-            # Add custom font - make sure to provide the full path to the .ttf file
             pdf.add_font('DejaVuSans', '', 'fonts\\DejaVuSans.ttf', uni=True)
             
             pdf.add_page()
@@ -208,33 +270,50 @@ class GenerateReport(StyledWidget):
             pdf.cell(0, 10, f"Address: {customer_info.get('address', 'N/A')}", ln=True)
 
             # Loan Details
-            pdf.ln(10)
-            pdf.set_font('DejaVuSans', '', 14)
-            pdf.cell(0, 10, "Loan Details", ln=True)
-
             for loan in loans:
+                pdf.ln(10)
+                pdf.set_font('DejaVuSans', '', 14)
+                pdf.cell(0, 10, "Loan Details", ln=True)
+                
                 pdf.set_font('DejaVuSans', '', 12)
-                pdf.cell(0, 10, f"Loan Date: {loan[0]}", ln=True)
-                pdf.cell(0, 10, f"Asset Description: {loan[1]}", ln=True)
-                pdf.cell(0, 10, f"Asset Weight: {loan[2]} kg", ln=True)
+                loan_date = datetime.strptime(loan[0], "%Y-%m-%d %H:%M:%S")
+                pdf.cell(0, 10, f"Loan Date: {loan_date.strftime('%d-%m-%Y %H:%M:%S')}", ln=True)
+                pdf.cell(0, 10, f"Total Weight: {float(loan[2]):,.2f} g", ln=True)
                 pdf.cell(0, 10, f"Total Loan Amount: ₹{float(loan[3]):,.2f}", ln=True)
-                pdf.cell(0, 10, f"Amount Due: ₹{float(loan[5]):,.2f}", ln=True)
+                pdf.cell(0, 10, f"Amount Due: ₹{float(loan[4]):,.2f}", ln=True)
 
-                # Fetch and add loan payments
+                # Add assets
+                pdf.ln(5)
+                pdf.set_font('DejaVuSans', '', 12)
+                pdf.cell(0, 10, "Assets:", ln=True)
+                assets = DatabaseManager.fetch_loan_assets(loan[-2])
+                if assets:
+                    for desc, weight in assets:
+                        pdf.cell(0, 10, f"- {desc}: {weight:,.2f}g", ln=True)
+                else:
+                    pdf.cell(0, 10, "No assets found", ln=True)
+
+                # Add loan payments
+                pdf.ln(5)
+                pdf.cell(0, 10, "Payment History:", ln=True)
                 payments = DatabaseManager.fetch_loan_payments(loan[-2])
                 if payments:
-                    pdf.set_font('DejaVuSans', '', 12)
-                    pdf.cell(0, 10, "Loan Payments:", ln=True)
                     pdf.set_font('DejaVuSans', '', 10)
                     for payment in payments:
-                        pdf.cell(0, 10, 
-                            f"Date: {payment['payment_date']}, "
-                            f"Amount: ₹{payment['payment_amount']:,.2f}, "
-                            f"Remaining: ₹{payment['amount_left']:,.2f}", 
-                            ln=True
+                        payment_date = datetime.strptime(payment['payment_date'], "%Y-%m-%d %H:%M:%S")
+                        pdf.multi_cell(0, 10, 
+                            f"Date: {payment_date.strftime('%d-%m-%Y %H:%M:%S')}\n"
+                            f"Asset: {payment.get('asset_description', 'N/A')}\n"
+                            f"Amount Paid: ₹{float(payment['payment_amount']):,.2f}\n"
+                            f"Interest Paid: ₹{float(payment['interest_amount']):,.2f}\n"
+                            f"Remaining Amount: ₹{float(payment['amount_left']):,.2f}\n"
                         )
+                        pdf.ln(5)
+                else:
+                    pdf.cell(0, 10, "No payments recorded", ln=True)
 
                 pdf.ln(10)
+                pdf.cell(0, 0, "_" * 50, ln=True)  # Add separator line between loans
 
             # Save PDF
             filename = f"customer_loan_report_{customer_info.get('name', 'unknown')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
@@ -243,62 +322,4 @@ class GenerateReport(StyledWidget):
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to generate report: {str(e)}")
-            """Generate a comprehensive PDF report for the selected customer."""
-            if not self.selected_customer_id:
-                QMessageBox.warning(self, "Error", "Please select a customer first.")
-                return
-
-            try:
-                # Fetch customer information
-                customer_info = DatabaseManager.get_customer_by_id(self.selected_customer_id)
-                loans = DatabaseManager.fetch_loans_for_customer(self.selected_customer_id)
-
-                # Create PDF
-                pdf = FPDF()
-                pdf.add_page()
-                pdf.set_font("Arial", "B", 16)
-                pdf.cell(0, 10, "Customer Loan Report", ln=True)
-
-                # Customer Information
-                pdf.set_font("Arial", "", 12)
-                pdf.cell(0, 10, f"Name: {customer_info['name']}", ln=True)
-                pdf.cell(0, 10, f"Account Number: {customer_info['account_number']}", ln=True)
-                pdf.cell(0, 10, f"Phone: {customer_info['phone']}", ln=True)
-                pdf.cell(0, 10, f"Address: {customer_info['address']}", ln=True)
-
-                # Loan Details
-                pdf.ln(10)
-                pdf.set_font("Arial", "B", 14)
-                pdf.cell(0, 10, "Loan Details", ln=True)
-
-                for loan in loans:
-                    pdf.set_font("Arial", "", 12)
-                    pdf.cell(0, 10, f"Loan Date: {loan[0]}", ln=True)
-                    pdf.cell(0, 10, f"Asset Description: {loan[1]}", ln=True)
-                    pdf.cell(0, 10, f"Asset Weight: {loan[2]} kg", ln=True)
-                    pdf.cell(0, 10, f"Total Loan Amount: ₹{float(loan[3]):,.2f}", ln=True)
-                    pdf.cell(0, 10, f"Amount Due: ₹{float(loan[5]):,.2f}", ln=True)
-
-                    # Fetch and add loan payments
-                    payments = DatabaseManager.fetch_loan_payments(loan[-2])
-                    if payments:
-                        pdf.set_font("Arial", "B", 12)
-                        pdf.cell(0, 10, "Loan Payments:", ln=True)
-                        pdf.set_font("Arial", "", 10)
-                        for payment in payments:
-                            pdf.cell(0, 10, 
-                                f"Date: {payment['payment_date']}, "
-                                f"Amount: ₹{payment['payment_amount']:,.2f}, "
-                                f"Remaining: ₹{payment['amount_left']:,.2f}", 
-                                ln=True
-                            )
-
-                    pdf.ln(10)
-
-                # Save PDF
-                filename = f"customer_loan_report_{customer_info['name']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-                pdf.output(filename)
-                QMessageBox.information(self, "Success", f"Report generated: {filename}")
-
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to generate report: {str(e)}")
+            

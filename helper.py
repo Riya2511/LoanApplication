@@ -132,6 +132,5 @@ def verifyPendrive():
     except Exception as e:
         print(f"Error verifying pendrive: {e}")
         return False
-    
-print(getPendriveSerialNumber())
+
  

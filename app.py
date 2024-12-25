@@ -12,7 +12,8 @@ class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Loan Management System")
-        self.resize(1920, 1080)
+        # self.resize(1920, 1080)
+        self.showMaximized()
         self.init_ui()
         DatabaseManager.init_database()
 
@@ -39,8 +40,8 @@ class MainWindow(QWidget):
         self.stacked_widget.setCurrentIndex(index)
 
 def main():
-    if not verifyPendrive():
-        return
+    # if not verifyPendrive():
+    #     return
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
