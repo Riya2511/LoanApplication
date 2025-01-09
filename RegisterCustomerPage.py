@@ -20,10 +20,6 @@ class RegisterCustomerPage(StyledWidget):
         # Regular form inputs
         self.name_input = QLineEdit()
         self.name_input.setFixedWidth(input_width)
-        self.account_number_input = QLineEdit()
-        self.account_number_input.setFixedWidth(input_width)
-        self.reference_id_input = QLineEdit()
-        self.reference_id_input.setFixedWidth(input_width)
         self.phone_input = QLineEdit()
         self.phone_input.setFixedWidth(input_width)
         self.address_input = QLineEdit()
@@ -32,10 +28,6 @@ class RegisterCustomerPage(StyledWidget):
         # Error labels
         self.name_error = QLabel()
         self.name_error.setStyleSheet("color: red; font-size: 12px;")
-        self.account_number_error = QLabel()
-        self.account_number_error.setStyleSheet("color: red; font-size: 12px;")
-        self.reference_id_error = QLabel()
-        self.reference_id_error.setStyleSheet("color: red; font-size: 12px;")
         self.phone_error = QLabel()
         self.phone_error.setStyleSheet("color: red; font-size: 12px;")
         self.address_error = QLabel()
@@ -44,10 +36,6 @@ class RegisterCustomerPage(StyledWidget):
         # Add fields to the form layout
         form_layout.addRow("Name:", self.name_input)
         form_layout.addRow("", self.name_error)
-        form_layout.addRow("Account Number:", self.account_number_input)
-        form_layout.addRow("", self.account_number_error)
-        form_layout.addRow("Reference Id:", self.reference_id_input)
-        form_layout.addRow("", self.reference_id_error)
         form_layout.addRow("Phone:", self.phone_input)
         form_layout.addRow("", self.phone_error)
         form_layout.addRow("Address:", self.address_input)
@@ -93,11 +81,6 @@ class RegisterCustomerPage(StyledWidget):
         if not name or len(name) < 2:
             errors.append(f"Row {row_number}: Invalid name (must be at least 2 characters)")
 
-        # Account number validation
-        account_number = row[1].strip()
-        if not re.match(r'^\d{10,20}$', account_number):
-            errors.append(f"Row {row_number}: Invalid account number (must be 10-20 digits)")
-
         # Phone validation
         phone = row[2].strip()
         if not re.match(r'^\d{10}$', phone):
@@ -108,12 +91,7 @@ class RegisterCustomerPage(StyledWidget):
         if not address or len(address) < 5:
             errors.append(f"Row {row_number}: Invalid address (must be at least 5 characters)")
 
-        # Reference ID validation (optional)
-        reference_id = row[4].strip() if len(row) > 4 else ""
-        if reference_id and len(reference_id) > 20:
-            errors.append(f"Row {row_number}: Reference ID too long (must be 20 characters or less)")
-
-        return errors, (name, account_number, phone, address, reference_id)
+        return errors, (name, phone, address)
 
     def upload_csv(self):
         """Handle CSV file upload and processing"""
@@ -170,8 +148,8 @@ class RegisterCustomerPage(StyledWidget):
             error_count = 0
             
             query = """
-            INSERT INTO Customers (name, account_number, phone, address, reference_id) 
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO Customers (name, phone, address) 
+            VALUES (?, ?, ?)
             """
             
             for row in valid_rows:
@@ -200,7 +178,6 @@ class RegisterCustomerPage(StyledWidget):
     def validate_input(self):
         """Validate input fields"""
         self.name_error.clear()
-        self.account_number_error.clear()
         self.phone_error.clear()
         self.address_error.clear()
 
@@ -213,24 +190,6 @@ class RegisterCustomerPage(StyledWidget):
             is_valid = False
         elif len(name) < 2:
             self.name_error.setText("Name must be at least 2 characters")
-            is_valid = False
-
-        # Account number validation
-        account_number = self.account_number_input.text().strip()
-        account_number_regex = r'^\d{10,20}$'  # Example: 10 to 20 digits
-        if not account_number:
-            self.account_number_error.setText("Account Number is required")
-            is_valid = False
-        elif not re.match(account_number_regex, account_number):
-            self.account_number_error.setText("Account Number must be 10-20 digits")
-            is_valid = False
-        
-        # Reference Id validation
-        reference_id = self.reference_id_input.text().strip()
-        if not reference_id:
-            is_valid = True
-        elif not len(reference_id) > 20:
-            self.reference_id_error.setText("Reference Id must be 10-20 characters")
             is_valid = False
 
         # Phone validation
@@ -260,23 +219,19 @@ class RegisterCustomerPage(StyledWidget):
             return
 
         name = self.name_input.text().strip()
-        account_number = self.account_number_input.text().strip()
-        reference_id = self.reference_id_input.text().strip()
         phone = self.phone_input.text().strip()
         address = self.address_input.text().strip()
 
         query = """
-        INSERT INTO Customers (name, account_number, reference_id, phone, address) 
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO Customers (name, phone, address) 
+        VALUES (?, ?, ?)
         """
         
         try:
-            cursor = DatabaseManager.execute_query(query, (name, account_number, reference_id, phone, address))
+            cursor = DatabaseManager.execute_query(query, (name, phone, address))
             if cursor:
                 QMessageBox.information(self, "Success", "Customer registered successfully!")
                 self.name_input.clear()
-                self.account_number_input.clear()
-                self.reference_id_input.clear()
                 self.phone_input.clear()
                 self.address_input.clear()
             else:

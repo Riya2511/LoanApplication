@@ -1,20 +1,18 @@
 import sqlite3
 import os
+
 class DatabaseManager:
     @staticmethod
     def init_database():
         """Initialize the database and create tables if they don't exist."""
         try:
             conn = sqlite3.connect("loanApp.db")
-            # if os.name == 'nt':  # Check if the OS is Windows
-            #     os.system(f"attrib +h {"loanApp.db"}")
             cursor = conn.cursor()
+
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS Customers (
                     customer_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name VARCHAR NOT NULL,
-                    account_number VARCHAR UNIQUE NOT NULL,
-                    reference_id VARCHAR NULL,
                     phone VARCHAR UNIQUE,
                     address TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -59,7 +57,7 @@ class DatabaseManager:
                     FOREIGN KEY (loan_id) REFERENCES Loans(loan_id)
                 );
             ''')
-            
+
             cursor.execute('''
                 CREATE VIEW IF NOT EXISTS LoanView AS
                 SELECT
@@ -93,12 +91,12 @@ class DatabaseManager:
         try:
             conn = DatabaseManager.create_connection()
             cursor = conn.cursor()
-            
+
             if params:
                 cursor.execute(query, params)
             else:
                 cursor.execute(query)
-            
+
             conn.commit()
             return cursor
         except sqlite3.Error as e:
@@ -113,12 +111,12 @@ class DatabaseManager:
         try:
             conn = DatabaseManager.create_connection()
             cursor = conn.cursor()
-            
+
             if params:
                 cursor.execute(query, params)
             else:
                 cursor.execute(query)
-            
+
             data = cursor.fetchall()
             return data
         except sqlite3.Error as e:
@@ -131,20 +129,20 @@ class DatabaseManager:
     @staticmethod
     def get_all_customers():
         """Fetch all customers for dropdown"""
-        query = "SELECT customer_id, name, account_number FROM Customers ORDER BY name"
+        query = "SELECT customer_id, name, phone FROM Customers ORDER BY name"
         return DatabaseManager.fetch_data(query)
 
     @staticmethod
     def get_customer_by_id(customer_id):
         """Fetch full customer details by ID"""
         query = """
-        SELECT customer_id, name, account_number, phone, address, reference_id
+        SELECT customer_id, name, phone, address
         FROM Customers 
         WHERE customer_id = ?
         """
         customer = DatabaseManager.fetch_data(query, (customer_id,))
         if customer:
-            columns = ['customer_id', 'name', 'account_number', 'phone', 'address', 'reference_id']
+            columns = ['customer_id', 'name', 'phone', 'address']
             return dict(zip(columns, customer[0]))  # Return first record as dict
         return None
 
