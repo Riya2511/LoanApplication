@@ -2,8 +2,9 @@ from PyQt5.QtCore import QEvent, Qt
 from PyQt5.QtWidgets import (
     QPushButton, QLineEdit, QFormLayout, QMessageBox, QLabel,
     QHBoxLayout, QComboBox, QGroupBox, QVBoxLayout, QTableWidget,
-    QTableWidgetItem
+    QTableWidgetItem, QDateEdit
 )
+from PyQt5.QtCore import QDate
 from helper import StyledWidget
 from DatabaseManager import DatabaseManager
 from datetime import datetime
@@ -63,10 +64,13 @@ class LoanUpdatePage(StyledWidget):
 
         # Assets Table
         self.assets_table = QTableWidget()
-        self.assets_table.setColumnCount(5)
-        self.assets_table.setHorizontalHeaderLabels(
-            ["Asset Description", "Weight (g)", "Amount Paid (₹)", "Interest (₹)", ""]
-        )
+        self.assets_table.setColumnCount(8)  # Increased from 7 to 8 for date input
+        self.assets_table.setHorizontalHeaderLabels([
+            "Loan Account Number", "Reference Id", "Asset Description", 
+            "Weight (g)", "Amount Paid (₹)", "Interest (₹)", "Payment Date", ""
+        ])
+        self.assets_table.setColumnWidth(0, 250)  # Loan Account Number column
+        self.assets_table.setColumnWidth(6, 120)  # Date column
         update_layout.addWidget(self.assets_table)
 
         # Repayment History
@@ -128,31 +132,38 @@ class LoanUpdatePage(StyledWidget):
 
     def populate_assets_table(self, loan_id):
         """Populate assets table with input fields for payments."""
-        # Get all assets and filter out those that have been repaid
         assets = DatabaseManager.fetch_loan_assets(loan_id)
-        repaid_assets = DatabaseManager.get_repaid_assets(loan_id)  # You'll need to add this method
-        
-        # Filter out repaid assets
-        unrepaid_assets = [(desc, weight) for desc, weight in assets 
+        repaid_assets = DatabaseManager.get_repaid_assets(loan_id)
+        unrepaid_assets = [(desc, loan_acc, ref_id, weight) for desc, loan_acc, ref_id, weight in assets 
                           if desc not in repaid_assets]
         
         self.assets_table.setRowCount(len(unrepaid_assets))
         
-        for row_idx, (description, weight) in enumerate(unrepaid_assets):
+        for row_idx, (description, loan_account, reference_id, weight) in enumerate(unrepaid_assets):
             # Asset description
             self.assets_table.setItem(row_idx, 0, QTableWidgetItem(description))
-            # Weight
-            self.assets_table.setItem(row_idx, 1, QTableWidgetItem(f"{weight:,.2f}"))
+            self.assets_table.setItem(row_idx, 1, QTableWidgetItem(loan_account))
+            self.assets_table.setItem(row_idx, 2, QTableWidgetItem(reference_id))
+            self.assets_table.setItem(row_idx, 3, QTableWidgetItem(f"{weight:,.2f}"))
             
             # Amount paid input
             amount_input = QLineEdit()
             amount_input.setPlaceholderText("Enter amount")
-            self.assets_table.setCellWidget(row_idx, 2, amount_input)
+            self.assets_table.setCellWidget(row_idx, 4, amount_input)
             
             # Interest input
             interest_input = QLineEdit()
             interest_input.setPlaceholderText("Enter interest")
-            self.assets_table.setCellWidget(row_idx, 3, interest_input)
+            self.assets_table.setCellWidget(row_idx, 5, interest_input)
+
+            # Date input
+            date_input = QDateEdit()
+            date_input.setDisplayFormat("dd-MM-yyyy")
+            date_input.setCalendarPopup(True)  # Shows calendar widget when clicked
+            date_input.setDate(QDate.currentDate())  # Set default to current date
+            date_input.setMinimumDate(QDate(2000, 1, 1))  # Set minimum date
+            date_input.setMaximumDate(QDate.currentDate())  # Can't select future dates
+            self.assets_table.setCellWidget(row_idx, 6, date_input)
             
             # Repay button
             repay_button = QPushButton("Repay")
@@ -173,8 +184,7 @@ class LoanUpdatePage(StyledWidget):
                     background-color: #cccccc;
                 }
             """)
-
-            self.assets_table.setCellWidget(row_idx, 4, repay_button)
+            self.assets_table.setCellWidget(row_idx, 7, repay_button)
             
             # Connect input validation
             amount_input.textChanged.connect(
@@ -193,9 +203,9 @@ class LoanUpdatePage(StyledWidget):
             for row_idx, repayment in enumerate(repayments):
                 self.repayment_table.insertRow(row_idx)
                 
-                # Format payment date
-                payment_date = datetime.strptime(repayment['payment_date'], "%Y-%m-%d %H:%M:%S")
-                formatted_date = payment_date.strftime("%d-%m-%Y %H:%M:%S")
+                # Format payment date to dd-mm-yyyy
+                payment_date = datetime.strptime(repayment['payment_date'], "%Y-%m-%d")
+                formatted_date = payment_date.strftime("%d-%m-%Y")
                 
                 # Add payment details to table
                 self.repayment_table.setItem(row_idx, 0, QTableWidgetItem(formatted_date))
@@ -211,9 +221,9 @@ class LoanUpdatePage(StyledWidget):
 
     def validate_inputs(self, row):
         """Validate payment inputs and enable/disable repay button."""
-        amount_input = self.assets_table.cellWidget(row, 2)
-        interest_input = self.assets_table.cellWidget(row, 3)
-        repay_button = self.assets_table.cellWidget(row, 4)
+        amount_input = self.assets_table.cellWidget(row, 4)
+        interest_input = self.assets_table.cellWidget(row, 5)
+        repay_button = self.assets_table.cellWidget(row, 7)  # Updated index
         
         try:
             amount = float(amount_input.text() or 0)
@@ -225,10 +235,13 @@ class LoanUpdatePage(StyledWidget):
     def handle_repayment(self, row):
         """Process asset repayment."""
         try:
-            amount_input = self.assets_table.cellWidget(row, 2)
-            interest_input = self.assets_table.cellWidget(row, 3)
+            amount_input = self.assets_table.cellWidget(row, 4)
+            interest_input = self.assets_table.cellWidget(row, 5)
+            date_input = self.assets_table.cellWidget(row, 6)
+            
             amount = float(amount_input.text())
             interest = float(interest_input.text())
+            payment_date = date_input.date().toPyDate()
             asset_desc = self.assets_table.item(row, 0).text()
 
             # Validate total payments don't exceed loan amount
@@ -238,20 +251,21 @@ class LoanUpdatePage(StyledWidget):
             if total_paid + amount > loan_amount:
                 raise ValueError(f"Total payments would exceed loan amount (₹{loan_amount:,.2f})")
 
-            # Insert payment
+            # Insert payment with the selected date
             DatabaseManager.insert_loan_payment(
                 self.current_loan_id,
                 payment_amount=amount,
                 interest_amount=interest,
                 amount_left=loan_amount - (total_paid + amount),
-                asset_description=asset_desc
+                asset_description=asset_desc,
+                payment_date=payment_date
             )
 
             # Update loan paid amount
             DatabaseManager.update_loan_payment(self.current_loan_id, amount)
             
             # Refresh UI
-            self.populate_assets_table(self.current_loan_id)  # This will now hide the repaid asset
+            self.populate_assets_table(self.current_loan_id)
             self.populate_repayment_table(self.current_loan_id)
             self.populate_loans_table()
             
@@ -310,9 +324,9 @@ class LoanUpdatePage(StyledWidget):
         for row_idx, loan in enumerate(loans):
             self.loan_table.insertRow(row_idx)
             for col_idx, value in enumerate(loan[:-2]):
-                if col_idx == 0:
-                    value = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
-                    value = value.strftime("%d-%m-%Y %H:%M:%S")
+                if col_idx == 0:  # Date column
+                    value = datetime.strptime(value, "%Y-%m-%d")
+                    value = value.strftime("%d-%m-%Y")  # Removed time component
                 elif col_idx in (2, 3, 4):
                     value = f"{float(value):,.2f}" if value else "0.00"
                 self.loan_table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))

@@ -70,10 +70,11 @@ class GenerateReport(StyledWidget):
 
         # Assets Table
         self.assets_table = QTableWidget()
-        self.assets_table.setColumnCount(2)
-        self.assets_table.setHorizontalHeaderLabels(
-            ["Asset Description", "Weight (g)"]
-        )
+        self.assets_table.setColumnCount(4)  # Increased column count to 4
+        self.assets_table.setHorizontalHeaderLabels([
+            "Loan Account Number", "Reference Id", "Asset Description", "Weight (g)"
+        ])
+        self.assets_table.setColumnWidth(0, 250)
         update_layout.addWidget(self.assets_table)
 
         # Loan Payments Table
@@ -129,10 +130,12 @@ class GenerateReport(StyledWidget):
         self.assets_table.setRowCount(0)
         assets = DatabaseManager.fetch_loan_assets(loan_id)
         
-        for row_idx, (description, weight) in enumerate(assets):
+        for row_idx, (description, weight, loan_account_number, reference_id) in enumerate(assets):
             self.assets_table.insertRow(row_idx)
             self.assets_table.setItem(row_idx, 0, QTableWidgetItem(description))
-            self.assets_table.setItem(row_idx, 1, QTableWidgetItem(f"{weight:,.2f}"))
+            self.assets_table.setItem(row_idx, 1, QTableWidgetItem(f"{weight}"))
+            self.assets_table.setItem(row_idx, 2, QTableWidgetItem(str(loan_account_number)))
+            self.assets_table.setItem(row_idx, 3, QTableWidgetItem(str(reference_id)))
 
     def populate_loan_payments_table(self, loan_id):
         """Populate the loan payments table with payment history."""
@@ -143,8 +146,8 @@ class GenerateReport(StyledWidget):
             for row_idx, repayment in enumerate(repayments):
                 self.loan_payments_table.insertRow(row_idx)
                 
-                payment_date = datetime.strptime(repayment['payment_date'], "%Y-%m-%d %H:%M:%S")
-                formatted_date = payment_date.strftime("%d-%m-%Y %H:%M:%S")
+                payment_date = datetime.strptime(repayment['payment_date'], "%Y-%m-%d")
+                formatted_date = payment_date.strftime("%d-%m-%Y")
                 
                 self.loan_payments_table.setItem(row_idx, 0, QTableWidgetItem(formatted_date))
                 self.loan_payments_table.setItem(row_idx, 1, QTableWidgetItem(repayment.get("asset_description", "")))
@@ -235,8 +238,8 @@ class GenerateReport(StyledWidget):
             self.loan_details_table.insertRow(row_idx)
             for col_idx, value in enumerate(loan[:-2]):
                 if col_idx == 0:
-                    value = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
-                    value = value.strftime("%d-%m-%Y %H:%M:%S")
+                    value = datetime.strptime(value, "%Y-%m-%d")
+                    value = value.strftime("%d-%m-%Y")
                 elif col_idx in (2, 3, 4):
                     value = f"{float(value):,.2f}" if value else "0.00"
                 self.loan_details_table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
@@ -260,66 +263,67 @@ class GenerateReport(StyledWidget):
             
             pdf.add_page()
             pdf.set_font('DejaVuSans', '', 16)
-            pdf.cell(0, 10, "Customer Loan Report", ln=True)
+            pdf.cell(0, 10, "Customer Loan Report", 0, 1)
 
             # Customer Information
             pdf.set_font('DejaVuSans', '', 12)
-            pdf.cell(0, 10, f"Name: {customer_info.get('name', 'N/A')}", ln=True)
-            pdf.cell(0, 10, f"Account Number: {customer_info.get('account_number', 'N/A')}", ln=True)
-            pdf.cell(0, 10, f"Phone: {customer_info.get('phone', 'N/A')}", ln=True)
-            pdf.cell(0, 10, f"Address: {customer_info.get('address', 'N/A')}", ln=True)
+            pdf.cell(0, 10, f"Name: {customer_info.get('name', 'N/A')}", 0, 1)
+            pdf.cell(0, 10, f"Phone: {customer_info.get('phone', 'N/A')}", 0, 1)
+            pdf.cell(0, 10, f"Address: {customer_info.get('address', 'N/A')}", 0, 1)
 
             # Loan Details
             for loan in loans:
                 pdf.ln(10)
                 pdf.set_font('DejaVuSans', '', 14)
-                pdf.cell(0, 10, "Loan Details", ln=True)
+                pdf.cell(0, 10, "Loan Details", 0, 1)
                 
                 pdf.set_font('DejaVuSans', '', 12)
-                loan_date = datetime.strptime(loan[0], "%Y-%m-%d %H:%M:%S")
-                pdf.cell(0, 10, f"Loan Date: {loan_date.strftime('%d-%m-%Y %H:%M:%S')}", ln=True)
-                pdf.cell(0, 10, f"Total Weight: {float(loan[2]):,.2f} g", ln=True)
-                pdf.cell(0, 10, f"Total Loan Amount: ₹{float(loan[3]):,.2f}", ln=True)
-                pdf.cell(0, 10, f"Amount Due: ₹{float(loan[4]):,.2f}", ln=True)
+                loan_date = datetime.strptime(loan[0], "%Y-%m-%d")
+                pdf.cell(0, 10, f"Loan Date: {loan_date.strftime('%d-%m-%Y')}", 0, 1)
+                pdf.cell(0, 10, f"Total Weight: {float(loan[2])} g", 0, 1)
+                pdf.cell(0, 10, f"Total Loan Amount: ₹{float(loan[3]):,.2f}", 0, 1)
+                pdf.cell(0, 10, f"Amount Due: ₹{float(loan[4]):,.2f}", 0, 1)
 
                 # Add assets
                 pdf.ln(5)
                 pdf.set_font('DejaVuSans', '', 12)
-                pdf.cell(0, 10, "Assets:", ln=True)
+                pdf.cell(0, 10, "Assets:", 0, 1)
                 assets = DatabaseManager.fetch_loan_assets(loan[-2])
                 if assets:
-                    for desc, weight in assets:
-                        pdf.cell(0, 10, f"- {desc}: {weight:,.2f}g", ln=True)
+                    for desc, weight, loan_account_number, reference_id in assets:
+                        pdf.cell(0, 10, f"  Loan Account Description: {desc}", 0, 1)
+                        pdf.cell(0, 10, f"  Reference Id: {weight}g", 0, 1)
+                        pdf.cell(0, 10, f"  Asset Description: {loan_account_number}", 0, 1)
+                        pdf.cell(0, 10, f"  Weight (g): {reference_id}", 0, 1)
+                        pdf.ln(2)
                 else:
-                    pdf.cell(0, 10, "No assets found", ln=True)
+                    pdf.cell(0, 10, "No assets found", 0, 1)
 
                 # Add loan payments
                 pdf.ln(5)
-                pdf.cell(0, 10, "Payment History:", ln=True)
+                pdf.cell(0, 10, "Payment History:", 0, 1)
                 payments = DatabaseManager.fetch_loan_payments(loan[-2])
                 if payments:
                     pdf.set_font('DejaVuSans', '', 10)
                     for payment in payments:
-                        payment_date = datetime.strptime(payment['payment_date'], "%Y-%m-%d %H:%M:%S")
-                        pdf.multi_cell(0, 10, 
-                            f"Date: {payment_date.strftime('%d-%m-%Y %H:%M:%S')}\n"
-                            f"Asset: {payment.get('asset_description', 'N/A')}\n"
-                            f"Amount Paid: ₹{float(payment['payment_amount']):,.2f}\n"
-                            f"Interest Paid: ₹{float(payment['interest_amount']):,.2f}\n"
-                            f"Remaining Amount: ₹{float(payment['amount_left']):,.2f}\n"
-                        )
+                        payment_date = datetime.strptime(payment['payment_date'], "%Y-%m-%d")
+                        pdf.cell(0, 10, f"Date: {payment_date.strftime('%d-%m-%Y')}", 0, 1)
+                        pdf.cell(0, 10, f"Asset: {payment.get('asset_description', 'N/A')}", 0, 1)
+                        pdf.cell(0, 10, f"Amount Paid: ₹{float(payment['payment_amount']):,.2f}", 0, 1)
+                        pdf.cell(0, 10, f"Interest Paid: ₹{float(payment['interest_amount']):,.2f}", 0, 1)
+                        pdf.cell(0, 10, f"Remaining Amount: ₹{float(payment['amount_left']):,.2f}", 0, 1)
                         pdf.ln(5)
                 else:
-                    pdf.cell(0, 10, "No payments recorded", ln=True)
+                    pdf.cell(0, 10, "No payments recorded", 0, 1)
 
                 pdf.ln(10)
-                pdf.cell(0, 0, "_" * 50, ln=True)  # Add separator line between loans
+                pdf.cell(0, 0, "_" * 50, 0, 1)  # Add separator line between loans
 
             # Save PDF
-            filename = f"customer_loan_report_{customer_info.get('name', 'unknown')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+            filename = f"customer_loan_report_{customer_info.get('name', 'unknown')}_{datetime.now().strftime('%Y%m%d')}.pdf"
             pdf.output(filename)
             QMessageBox.information(self, "Success", f"Report generated: {filename}")
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to generate report: {str(e)}")
-            
+        

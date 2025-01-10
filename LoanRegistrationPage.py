@@ -3,7 +3,10 @@ from helper import StyledWidget
 from DatabaseManager import DatabaseManager
 from PyQt5.QtWidgets import (QPushButton, QLineEdit, QFormLayout, QMessageBox, 
                            QLabel, QHBoxLayout, QComboBox, QGroupBox, QVBoxLayout,
-                           QScrollArea, QWidget)
+                           QScrollArea, QWidget, QTableWidget, QTableWidgetItem, QHeaderView)
+from PyQt5.QtWidgets import QDateEdit
+from PyQt5.QtCore import QDate
+from PyQt5.QtWidgets import QDateEdit, QSizePolicy
 
 class AssetEntry(QGroupBox):
     def __init__(self, parent_widget=None, index=0):
@@ -11,43 +14,70 @@ class AssetEntry(QGroupBox):
         self.parent_widget = parent_widget
         self.index = index
         self.init_ui()
-
+        
     def init_ui(self):
         self.setTitle(f"Asset {self.index + 1}")
-        self.setMinimumHeight(150)
-        
+        self.setMinimumHeight(300)
+        self.setMaximumHeight(300)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
         main_layout = QVBoxLayout()
-        input_layout = QHBoxLayout()
+        input_layout = QVBoxLayout()
+
+        # Style for input fields
+        input_style = """
+            QLineEdit {
+                min-height: 30px;
+                max-height: 30px;
+                padding: 5px;
+            }
+        """
         
-        # Description section
+        # Loan Account Number
+        account_number_layout = QHBoxLayout()
+        account_number_label = QLabel("Loan Account Number:")
+        self.account_number_input = QLineEdit()
+        self.account_number_input.setPlaceholderText("Enter Loan Account Number")
+        self.account_number_input.setStyleSheet(input_style)
+        account_number_layout.addWidget(account_number_label)
+        account_number_layout.addWidget(self.account_number_input)
+        input_layout.addLayout(account_number_layout)
+
+        # Reference ID
+        reference_id_layout = QHBoxLayout()
+        reference_id_label = QLabel("Reference ID:")
+        self.reference_id_input = QLineEdit()
+        self.reference_id_input.setPlaceholderText("Enter Reference ID")
+        self.reference_id_input.setStyleSheet(input_style)
+        reference_id_layout.addWidget(reference_id_label)
+        reference_id_layout.addWidget(self.reference_id_input)
+        input_layout.addLayout(reference_id_layout)
+
+        # Description
         desc_layout = QHBoxLayout()
         desc_label = QLabel("Description:")
         self.description_input = QLineEdit()
         self.description_input.setPlaceholderText("Enter Asset Description")
+        self.description_input.setStyleSheet(input_style)
         desc_layout.addWidget(desc_label)
         desc_layout.addWidget(self.description_input)
         input_layout.addLayout(desc_layout)
-        
-        # Add some spacing
-        input_layout.addSpacing(20)
-        
-        # Weight section
+
+        # Weight
         weight_layout = QHBoxLayout()
         weight_label = QLabel("Weight (g):")
         self.weight_input = QLineEdit()
         self.weight_input.setPlaceholderText("Enter Asset Weight (g)")
+        self.weight_input.setStyleSheet(input_style)
         weight_layout.addWidget(weight_label)
         weight_layout.addWidget(self.weight_input)
         input_layout.addLayout(weight_layout)
-        
-        main_layout.addLayout(input_layout)
-        
-        # Remove button at bottom
-        bottom_layout = QHBoxLayout()
-        bottom_layout.addStretch()
-        remove_btn = QPushButton("Remove Asset")
-        remove_btn.setFixedSize(120, 30)
-        remove_btn.setStyleSheet("""
+
+        remove_layout = QHBoxLayout()
+        remove_layout.addStretch()
+        self.remove_btn = QPushButton("Remove Asset")
+        self.remove_btn.setFixedSize(120, 30)
+        self.remove_btn.setStyleSheet("""
             QPushButton {
                 background-color: #ff4444;
                 color: white;
@@ -59,21 +89,124 @@ class AssetEntry(QGroupBox):
                 background-color: #ff0000;
             }
         """)
-        remove_btn.clicked.connect(self.remove_asset)
-        bottom_layout.addWidget(remove_btn)
-        
-        main_layout.addLayout(bottom_layout)
+        self.remove_btn.clicked.connect(self.remove_asset)
+        remove_layout.addWidget(self.remove_btn)
+        input_layout.addLayout(remove_layout)
+
+        main_layout.addLayout(input_layout)
         self.setLayout(main_layout)
+
+    def get_data(self):
+        return {
+            'loan_account_number': self.account_number_input.text().strip(),
+            'reference_id': self.reference_id_input.text().strip(),
+            'description': self.description_input.text().strip(),
+            'weight': self.weight_input.text().strip()
+        }
 
     def remove_asset(self):
         if self.parent_widget:
             self.parent_widget.remove_asset_entry(self)
 
+class AssetEntry(QGroupBox):
+    def __init__(self, parent_widget=None, index=0):
+        super().__init__()
+        self.parent_widget = parent_widget
+        self.index = index
+        self.init_ui()
+        
+    def init_ui(self):
+        self.setTitle(f"Asset {self.index + 1}")
+        self.setMinimumHeight(300)
+        self.setMaximumHeight(300)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        main_layout = QVBoxLayout()
+        input_layout = QVBoxLayout()
+
+        # Style for input fields
+        input_style = """
+            QLineEdit {
+                min-height: 30px;
+                max-height: 30px;
+                padding: 5px;
+            }
+        """
+        
+        # Loan Account Number
+        account_number_layout = QHBoxLayout()
+        account_number_label = QLabel("Loan Account Number:")
+        self.account_number_input = QLineEdit()
+        self.account_number_input.setPlaceholderText("Enter Loan Account Number")
+        self.account_number_input.setStyleSheet(input_style)
+        account_number_layout.addWidget(account_number_label)
+        account_number_layout.addWidget(self.account_number_input)
+        input_layout.addLayout(account_number_layout)
+
+        # Reference ID
+        reference_id_layout = QHBoxLayout()
+        reference_id_label = QLabel("Reference ID:")
+        self.reference_id_input = QLineEdit()
+        self.reference_id_input.setPlaceholderText("Enter Reference ID")
+        self.reference_id_input.setStyleSheet(input_style)
+        reference_id_layout.addWidget(reference_id_label)
+        reference_id_layout.addWidget(self.reference_id_input)
+        input_layout.addLayout(reference_id_layout)
+
+        # Description
+        desc_layout = QHBoxLayout()
+        desc_label = QLabel("Description:")
+        self.description_input = QLineEdit()
+        self.description_input.setPlaceholderText("Enter Asset Description")
+        self.description_input.setStyleSheet(input_style)
+        desc_layout.addWidget(desc_label)
+        desc_layout.addWidget(self.description_input)
+        input_layout.addLayout(desc_layout)
+
+        # Weight
+        weight_layout = QHBoxLayout()
+        weight_label = QLabel("Weight (g):")
+        self.weight_input = QLineEdit()
+        self.weight_input.setPlaceholderText("Enter Asset Weight (g)")
+        self.weight_input.setStyleSheet(input_style)
+        weight_layout.addWidget(weight_label)
+        weight_layout.addWidget(self.weight_input)
+        input_layout.addLayout(weight_layout)
+
+        remove_layout = QHBoxLayout()
+        remove_layout.addStretch()
+        self.remove_btn = QPushButton("Remove Asset")
+        self.remove_btn.setFixedSize(120, 30)
+        self.remove_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ff4444;
+                color: white;
+                border-radius: 12px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #ff0000;
+            }
+        """)
+        self.remove_btn.clicked.connect(self.remove_asset)
+        remove_layout.addWidget(self.remove_btn)
+        input_layout.addLayout(remove_layout)
+
+        main_layout.addLayout(input_layout)
+        self.setLayout(main_layout)
+
     def get_data(self):
         return {
+            'loan_account_number': self.account_number_input.text().strip(),
+            'reference_id': self.reference_id_input.text().strip(),
             'description': self.description_input.text().strip(),
             'weight': self.weight_input.text().strip()
         }
+
+    def remove_asset(self):
+        if self.parent_widget:
+            self.parent_widget.remove_asset_entry(self)
 
 class LoanRegistrationPage(StyledWidget):
     def __init__(self, parent, switch_page_callback):
@@ -108,6 +241,29 @@ class LoanRegistrationPage(StyledWidget):
 
         self.loan_form_group = QGroupBox("Loan Registration")
         loan_form_layout = QFormLayout()
+        
+        # Add date input at loan level
+        self.date_input = QDateEdit()
+        self.date_input.setCalendarPopup(True)
+        self.date_input.setDate(QDate.currentDate())
+        self.date_input.setStyleSheet("""
+            QDateEdit {
+                min-height: 30px;
+                max-height: 30px;
+                padding: 5px;
+                color: black;
+            }
+            QCalendarWidget QAbstractItemView {
+                color: black;
+            }
+            QCalendarWidget QWidget {
+                color: black;
+            }
+            QCalendarWidget QToolButton {
+                color: black;
+            }
+        """)
+        loan_form_layout.addRow("Loan Date:", self.date_input)
         
         self.loan_amount_input = QLineEdit()
         self.loan_amount_input.setPlaceholderText("Enter Loan Amount (₹)")
@@ -162,27 +318,44 @@ class LoanRegistrationPage(StyledWidget):
         self.content_layout.addWidget(self.loan_form_group)
         
         self.customer_dropdown.currentIndexChanged.connect(self.on_customer_selected)
+
+        self.loans_group = QGroupBox("Customer Loans")
+        loans_layout = QVBoxLayout()
+        
+        self.loans_table = QTableWidget()
+        self.loans_table.setColumnCount(7)
+        self.loans_table.setHorizontalHeaderLabels([
+            "Loan Date", 
+            "Assets", 
+            "Total Weight (g)", 
+            "Loan Amount (₹)", 
+            "Amount Due (₹)",
+            "Interest Paid (₹)",
+            "Status"
+        ])
+        
+        self.loans_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.loans_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.loans_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.loans_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.loans_table.setAlternatingRowColors(True)
+        self.loans_table.setStyleSheet("""
+            QTableWidget {
+                background-color: white;
+                alternate-background-color: #f5f5f5;
+            }
+            QHeaderView::section {
+                background-color: #e0e0e0;
+                padding: 5px;
+                border: 1px solid #d0d0d0;
+            }
+        """)
+        
+        loans_layout.addWidget(self.loans_table)
+        self.loans_group.setLayout(loans_layout)
+        self.content_layout.addWidget(self.loans_group)
+
         self.content_layout.addStretch(1)
-
-    def on_loan_amount_changed(self, text):
-        try:
-            amount = float(text)
-            self.add_asset_btn.setEnabled(amount > 0)
-        except ValueError:
-            self.add_asset_btn.setEnabled(False)
-
-    def add_asset_entry(self):
-        asset_entry = AssetEntry(parent_widget=self, index=len(self.asset_entries))
-        self.asset_entries.append(asset_entry)
-        self.assets_layout.insertWidget(len(self.asset_entries) - 1, asset_entry)
-
-    def remove_asset_entry(self, entry):
-        self.assets_layout.removeWidget(entry)
-        self.asset_entries.remove(entry)
-        entry.deleteLater()
-        for i, entry in enumerate(self.asset_entries):
-            entry.index = i
-            entry.setTitle(f"Asset {i + 1}")
 
     def register_loan(self):
         try:
@@ -193,16 +366,22 @@ class LoanRegistrationPage(StyledWidget):
             if not self.asset_entries:
                 raise ValueError("Please add at least one asset.")
 
+            loan_date = self.date_input.date().toString("yyyy-MM-dd")
             assets_data = []
             for asset_entry in self.asset_entries:
                 data = asset_entry.get_data()
+                if not data['loan_account_number']:
+                    raise ValueError(f"Asset {asset_entry.index + 1}: Loan account number cannot be empty.")
+                if not data['reference_id']:
+                    raise ValueError(f"Asset {asset_entry.index + 1}: Reference ID cannot be empty.")
                 if not data['description']:
                     raise ValueError(f"Asset {asset_entry.index + 1}: Description cannot be empty.")
                 try:
                     weight = float(data['weight'])
                     if weight <= 0:
                         raise ValueError(f"Asset {asset_entry.index + 1}: Weight must be positive.")
-                    assets_data.append((data['description'], weight))
+                    data['weight'] = weight
+                    assets_data.append(data)
                 except ValueError:
                     raise ValueError(f"Asset {asset_entry.index + 1}: Invalid weight value.")
 
@@ -215,13 +394,40 @@ class LoanRegistrationPage(StyledWidget):
             return
 
         try:
-            loan_id = DatabaseManager.insert_loan(self.selected_customer_id, loan_amount)
-            for description, weight in assets_data:
-                DatabaseManager.insert_asset(loan_id, description, weight)
+            loan_id = DatabaseManager.insert_loan(self.selected_customer_id, loan_amount, loan_date)
+            for asset in assets_data:
+                DatabaseManager.insert_asset(
+                    loan_id,
+                    asset['loan_account_number'],
+                    asset['reference_id'],
+                    asset['description'],
+                    asset['weight']
+                )
             QMessageBox.information(self, "Success", "Loan registered successfully!")
             self.reset_form()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to register loan: {str(e)}")
+
+    def on_loan_amount_changed(self, text):
+        try:
+            amount = float(text)
+            self.add_asset_btn.setEnabled(amount > 0)
+        except ValueError:
+            self.add_asset_btn.setEnabled(False)
+
+    def add_asset_entry(self):
+        asset_entry = AssetEntry(parent_widget=self, index=len(self.asset_entries))
+        asset_entry.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.asset_entries.append(asset_entry)
+        self.assets_layout.insertWidget(len(self.asset_entries) - 1, asset_entry)
+
+    def remove_asset_entry(self, entry):
+        self.assets_layout.removeWidget(entry)
+        self.asset_entries.remove(entry)
+        entry.deleteLater()
+        for i, entry in enumerate(self.asset_entries):
+            entry.index = i
+            entry.setTitle(f"Asset {i + 1}")
 
     def reset_form(self):
         self.loan_amount_input.clear()
@@ -247,6 +453,39 @@ class LoanRegistrationPage(StyledWidget):
             return
         self.selected_customer_id = self.customer_dropdown.currentData()
         self.update_customer_info()
+        self.update_loans_table()
+    
+    def update_loans_table(self):
+        if not self.selected_customer_id:
+            self.loans_table.setRowCount(0)
+            return
+            
+        loans = DatabaseManager.fetch_loans_for_customer(self.selected_customer_id)
+        self.loans_table.setRowCount(len(loans))
+        
+        for row, loan in enumerate(loans):
+            # Convert the date string from yyyy-MM-dd to dd-MM-yyyy
+            try:
+                # Parse the original date string
+                date_parts = loan[0].split('-')
+                if len(date_parts) == 3:
+                    # Rearrange to dd-MM-yyyy format
+                    formatted_date = f"{date_parts[2]}-{date_parts[1]}-{date_parts[0]}"
+                else:
+                    formatted_date = loan[0]  # Keep original if parsing fails
+            except Exception:
+                formatted_date = loan[0]  # Keep original if any error occurs
+            
+            # Update table with formatted date
+            self.loans_table.setItem(row, 0, QTableWidgetItem(formatted_date))
+            self.loans_table.setItem(row, 1, QTableWidgetItem(loan[1] or "N/A"))
+            self.loans_table.setItem(row, 2, QTableWidgetItem(f"{loan[2]:.2f}"))
+            self.loans_table.setItem(row, 3, QTableWidgetItem(f"{loan[3]:.2f}"))
+            self.loans_table.setItem(row, 4, QTableWidgetItem(f"{loan[4]:.2f}"))
+            self.loans_table.setItem(row, 5, QTableWidgetItem(f"{loan[5]:.2f}"))
+            
+            status = "Completed" if float(loan[4]) <= 0 else "Pending"
+            self.loans_table.setItem(row, 6, QTableWidgetItem(status))
 
     def update_customer_info(self):
         layout = self.customer_info_group.layout()

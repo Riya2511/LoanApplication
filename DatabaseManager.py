@@ -37,6 +37,8 @@ class DatabaseManager:
                 CREATE TABLE IF NOT EXISTS Assets (
                     asset_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     loan_id INTEGER NOT NULL,
+                    loan_account_number TEXT UNIQUE NOT NULL,
+                    reference_id TEXT UNIQUE,
                     description TEXT NOT NULL,
                     weight DECIMAL(10, 2) NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -74,6 +76,7 @@ class DatabaseManager:
                 LEFT JOIN LoanPayments p ON l.loan_id = p.loan_id
                 GROUP BY l.loan_id;
             ''')
+
             conn.commit()
         except sqlite3.Error as e:
             print(f"Database initialization error: {e}")
@@ -147,51 +150,51 @@ class DatabaseManager:
         return None
 
     @staticmethod
-    def insert_loan(customer_id, loan_amount):
+    def insert_loan(customer_id, loan_amount, loan_date):
         """Insert a new loan and return the loan_id"""
         query = """
         INSERT INTO Loans 
-        (customer_id, loan_amount) 
-        VALUES (?, ?)
-        """
-        conn = DatabaseManager.create_connection()
-        try:
-            cursor = conn.cursor()
-            cursor.execute(query, (customer_id, loan_amount))
-            conn.commit()
-            return cursor.lastrowid
-        finally:
-            conn.close()
-
-    @staticmethod
-    def insert_asset(loan_id, description, weight):
-        """Insert a new asset associated with a loan"""
-        query = """
-        INSERT INTO Assets 
-        (loan_id, description, weight) 
+        (customer_id, loan_amount, created_at) 
         VALUES (?, ?, ?)
         """
         conn = DatabaseManager.create_connection()
         try:
             cursor = conn.cursor()
-            cursor.execute(query, (loan_id, description, weight))
+            cursor.execute(query, (customer_id, loan_amount, loan_date))
             conn.commit()
             return cursor.lastrowid
         finally:
             conn.close()
 
     @staticmethod
-    def insert_loan_payment(loan_id, payment_amount, interest_amount, amount_left, asset_description):
+    def insert_asset(loan_id, loan_account_number, reference_id, description, weight):
+        """Insert a new asset associated with a loan"""
+        query = """
+        INSERT INTO Assets 
+        (loan_id, loan_account_number, reference_id, description, weight) 
+        VALUES (?, ?, ?, ?, ?)
+        """
+        conn = DatabaseManager.create_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(query, (loan_id, loan_account_number, reference_id, description, weight))
+            conn.commit()
+            return cursor.lastrowid
+        finally:
+            conn.close()
+
+    @staticmethod
+    def insert_loan_payment(loan_id, payment_amount, interest_amount, amount_left, asset_description, payment_date):
         """Insert a new loan payment with asset details."""
         query = """
         INSERT INTO LoanPayments (
             loan_id, payment_amount, interest_amount, 
             amount_left, asset_description, payment_date
-        ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ) VALUES (?, ?, ?, ?, ?, ?)
         """
         DatabaseManager.execute_query(
             query, 
-            (loan_id, payment_amount, interest_amount, amount_left, asset_description)
+            (loan_id, payment_amount, interest_amount, amount_left, asset_description, payment_date)
         )
 
     @staticmethod
@@ -300,7 +303,7 @@ class DatabaseManager:
     def fetch_loan_assets(loan_id):
         """Fetch assets attached to a given loan."""
         query = """
-        SELECT description, weight
+        SELECT loan_account_number, reference_id, description, weight
         FROM Assets
         WHERE loan_id = ?
         """
