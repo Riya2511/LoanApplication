@@ -10,6 +10,7 @@ from helper import verifyPendrive
 
 class MainWindow(QWidget):
     def __init__(self):
+        
         super().__init__()
         self.setWindowTitle("Loan Management System")
         # self.resize(1920, 1080)

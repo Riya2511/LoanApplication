@@ -24,6 +24,7 @@ class DatabaseManager:
                 CREATE TABLE IF NOT EXISTS Loans (
                     loan_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     customer_id INTEGER NOT NULL,
+                    loan_account_number TEXT UNIQUE NOT NULL,
                     loan_amount DECIMAL(10, 2) NOT NULL,
                     loan_amount_paid DECIMAL(10, 2) DEFAULT 0.00,
                     loan_status TEXT DEFAULT 'Pending',
@@ -37,7 +38,6 @@ class DatabaseManager:
                 CREATE TABLE IF NOT EXISTS Assets (
                     asset_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     loan_id INTEGER NOT NULL,
-                    loan_account_number TEXT UNIQUE NOT NULL,
                     reference_id TEXT UNIQUE,
                     description TEXT NOT NULL,
                     weight DECIMAL(10, 2) NOT NULL,
@@ -69,6 +69,7 @@ class DatabaseManager:
                     l.loan_amount AS loan_amount,
                     (l.loan_amount - l.loan_amount_paid) AS loan_amount_due,
                     COALESCE(SUM(p.interest_amount), 0) AS total_interest_amount,
+                    l.loan_account_number AS loan_account_number,
                     l.loan_id AS loan_id,
                     l.customer_id AS customer_id
                 FROM Loans l
@@ -150,34 +151,34 @@ class DatabaseManager:
         return None
 
     @staticmethod
-    def insert_loan(customer_id, loan_amount, loan_date):
+    def insert_loan(customer_id, loan_amount, loan_date, loan_account_number):
         """Insert a new loan and return the loan_id"""
         query = """
         INSERT INTO Loans 
-        (customer_id, loan_amount, created_at) 
-        VALUES (?, ?, ?)
+        (customer_id, loan_amount, created_at, loan_account_number) 
+        VALUES (?, ?, ?, ?)
         """
         conn = DatabaseManager.create_connection()
         try:
             cursor = conn.cursor()
-            cursor.execute(query, (customer_id, loan_amount, loan_date))
+            cursor.execute(query, (customer_id, loan_amount, loan_date, loan_account_number))
             conn.commit()
             return cursor.lastrowid
         finally:
             conn.close()
 
     @staticmethod
-    def insert_asset(loan_id, loan_account_number, reference_id, description, weight):
+    def insert_asset(loan_id, reference_id, description, weight):
         """Insert a new asset associated with a loan"""
         query = """
         INSERT INTO Assets 
-        (loan_id, loan_account_number, reference_id, description, weight) 
-        VALUES (?, ?, ?, ?, ?)
+        (loan_id, reference_id, description, weight) 
+        VALUES (?, ?, ?, ?)
         """
         conn = DatabaseManager.create_connection()
         try:
             cursor = conn.cursor()
-            cursor.execute(query, (loan_id, loan_account_number, reference_id, description, weight))
+            cursor.execute(query, (loan_id, reference_id, description, weight))
             conn.commit()
             return cursor.lastrowid
         finally:
@@ -303,7 +304,7 @@ class DatabaseManager:
     def fetch_loan_assets(loan_id):
         """Fetch assets attached to a given loan."""
         query = """
-        SELECT loan_account_number, reference_id, description, weight
+        SELECT reference_id, description, weight
         FROM Assets
         WHERE loan_id = ?
         """
@@ -375,6 +376,57 @@ class DatabaseManager:
         except sqlite3.Error as e:
             print(f"Database error while fetching repaid assets for loan_id {loan_id}: {e}")
             return []
+        finally:
+            if conn:
+                conn.close()
+
+    @staticmethod
+    def insert_loan_with_assets(customer_id, loan_amount, loan_date, loan_account_number, assets_data):
+        conn = None
+        try:
+            conn = DatabaseManager.create_connection()
+            conn.execute("BEGIN TRANSACTION")
+            cursor = conn.cursor()
+            
+            # Insert loan
+            cursor.execute("""
+                INSERT INTO Loans 
+                (customer_id, loan_amount, created_at, loan_account_number) 
+                VALUES (?, ?, ?, ?)
+            """, (customer_id, loan_amount, loan_date, loan_account_number))
+            
+            loan_id = cursor.lastrowid
+            
+            # Insert assets
+            for asset in assets_data:
+                cursor.execute("""
+                    INSERT INTO Assets 
+                    (loan_id, reference_id, description, weight) 
+                    VALUES (?, ?, ?, ?)
+                """, (loan_id, asset['reference_id'], asset['description'], asset['weight']))
+            
+            conn.commit()
+            return True, "Loan registered successfully"
+            
+        except sqlite3.IntegrityError as e:
+            if conn:
+                conn.rollback()
+            if "loan_account_number" in str(e):
+                return False, "Loan account number already exists"
+            elif "reference_id" in str(e):
+                return False, "Asset reference ID already exists"
+            return False, f"Data integrity error: {str(e)}"
+            
+        except sqlite3.Error as e:
+            if conn:
+                conn.rollback()
+            return False, f"Database error: {str(e)}"
+            
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            return False, f"Unexpected error: {str(e)}"
+            
         finally:
             if conn:
                 conn.close()

@@ -19,6 +19,10 @@ class LoanUpdatePage(StyledWidget):
         self.assets_table = None
         self.repayment_table = None
         self.init_ui()
+        
+        # Hide tables initially
+        self.loan_table.setVisible(False)
+        self.customer_info_group.setVisible(False)
 
     def init_ui(self):
         # Customer Selection Section
@@ -28,6 +32,9 @@ class LoanUpdatePage(StyledWidget):
         customer_layout.addWidget(QLabel("Select Customer:"))
         customer_layout.addWidget(self.customer_dropdown)
         self.content_layout.addLayout(customer_layout)
+
+        # Add a placeholder item
+        self.customer_dropdown.addItem("Select a customer", None)
 
         # Customer Information Group Box
         self.customer_info_group = QGroupBox("Customer Information")
@@ -64,13 +71,13 @@ class LoanUpdatePage(StyledWidget):
 
         # Assets Table
         self.assets_table = QTableWidget()
-        self.assets_table.setColumnCount(8)  # Increased from 7 to 8 for date input
+        self.assets_table.setColumnCount(7)  # Reduced from 8 to 7 columns
         self.assets_table.setHorizontalHeaderLabels([
-            "Loan Account Number", "Reference Id", "Asset Description", 
-            "Weight (g)", "Amount Paid (₹)", "Interest (₹)", "Payment Date", ""
+            "Asset Description", "Reference Id", "Weight (g)", 
+            "Amount Paid (₹)", "Interest (₹)", "Payment Date", ""
         ])
-        self.assets_table.setColumnWidth(0, 250)  # Loan Account Number column
-        self.assets_table.setColumnWidth(6, 120)  # Date column
+        self.assets_table.setColumnWidth(0, 250)  # Asset Description column
+        self.assets_table.setColumnWidth(5, 120)  # Date column
         update_layout.addWidget(self.assets_table)
 
         # Repayment History
@@ -134,36 +141,35 @@ class LoanUpdatePage(StyledWidget):
         """Populate assets table with input fields for payments."""
         assets = DatabaseManager.fetch_loan_assets(loan_id)
         repaid_assets = DatabaseManager.get_repaid_assets(loan_id)
-        unrepaid_assets = [(desc, loan_acc, ref_id, weight) for desc, loan_acc, ref_id, weight in assets 
+        unrepaid_assets = [(desc, ref_id, weight) for desc, ref_id, weight in assets 
                           if desc not in repaid_assets]
         
         self.assets_table.setRowCount(len(unrepaid_assets))
         
-        for row_idx, (description, loan_account, reference_id, weight) in enumerate(unrepaid_assets):
+        for row_idx, (description, reference_id, weight) in enumerate(unrepaid_assets):
             # Asset description
             self.assets_table.setItem(row_idx, 0, QTableWidgetItem(description))
-            self.assets_table.setItem(row_idx, 1, QTableWidgetItem(loan_account))
-            self.assets_table.setItem(row_idx, 2, QTableWidgetItem(reference_id))
-            self.assets_table.setItem(row_idx, 3, QTableWidgetItem(f"{weight:,.2f}"))
+            self.assets_table.setItem(row_idx, 1, QTableWidgetItem(reference_id))
+            self.assets_table.setItem(row_idx, 2, QTableWidgetItem(f"{weight:,.2f}"))
             
             # Amount paid input
             amount_input = QLineEdit()
             amount_input.setPlaceholderText("Enter amount")
-            self.assets_table.setCellWidget(row_idx, 4, amount_input)
+            self.assets_table.setCellWidget(row_idx, 3, amount_input)
             
             # Interest input
             interest_input = QLineEdit()
             interest_input.setPlaceholderText("Enter interest")
-            self.assets_table.setCellWidget(row_idx, 5, interest_input)
+            self.assets_table.setCellWidget(row_idx, 4, interest_input)
 
             # Date input
             date_input = QDateEdit()
             date_input.setDisplayFormat("dd-MM-yyyy")
-            date_input.setCalendarPopup(True)  # Shows calendar widget when clicked
-            date_input.setDate(QDate.currentDate())  # Set default to current date
-            date_input.setMinimumDate(QDate(2000, 1, 1))  # Set minimum date
-            date_input.setMaximumDate(QDate.currentDate())  # Can't select future dates
-            self.assets_table.setCellWidget(row_idx, 6, date_input)
+            date_input.setCalendarPopup(True)
+            date_input.setDate(QDate.currentDate())
+            date_input.setMinimumDate(QDate(2000, 1, 1))
+            date_input.setMaximumDate(QDate.currentDate())
+            self.assets_table.setCellWidget(row_idx, 5, date_input)
             
             # Repay button
             repay_button = QPushButton("Repay")
@@ -184,7 +190,7 @@ class LoanUpdatePage(StyledWidget):
                     background-color: #cccccc;
                 }
             """)
-            self.assets_table.setCellWidget(row_idx, 7, repay_button)
+            self.assets_table.setCellWidget(row_idx, 6, repay_button)
             
             # Connect input validation
             amount_input.textChanged.connect(
@@ -203,11 +209,9 @@ class LoanUpdatePage(StyledWidget):
             for row_idx, repayment in enumerate(repayments):
                 self.repayment_table.insertRow(row_idx)
                 
-                # Format payment date to dd-mm-yyyy
                 payment_date = datetime.strptime(repayment['payment_date'], "%Y-%m-%d")
                 formatted_date = payment_date.strftime("%d-%m-%Y")
                 
-                # Add payment details to table
                 self.repayment_table.setItem(row_idx, 0, QTableWidgetItem(formatted_date))
                 self.repayment_table.setItem(row_idx, 1, QTableWidgetItem(repayment.get("asset_description", "")))
                 self.repayment_table.setItem(row_idx, 2, QTableWidgetItem(f"{float(repayment['payment_amount']):,.2f}"))
@@ -221,9 +225,9 @@ class LoanUpdatePage(StyledWidget):
 
     def validate_inputs(self, row):
         """Validate payment inputs and enable/disable repay button."""
-        amount_input = self.assets_table.cellWidget(row, 4)
-        interest_input = self.assets_table.cellWidget(row, 5)
-        repay_button = self.assets_table.cellWidget(row, 7)  # Updated index
+        amount_input = self.assets_table.cellWidget(row, 3)  # Updated index
+        interest_input = self.assets_table.cellWidget(row, 4)  # Updated index
+        repay_button = self.assets_table.cellWidget(row, 6)  # Updated index
         
         try:
             amount = float(amount_input.text() or 0)
@@ -235,9 +239,9 @@ class LoanUpdatePage(StyledWidget):
     def handle_repayment(self, row):
         """Process asset repayment."""
         try:
-            amount_input = self.assets_table.cellWidget(row, 4)
-            interest_input = self.assets_table.cellWidget(row, 5)
-            date_input = self.assets_table.cellWidget(row, 6)
+            amount_input = self.assets_table.cellWidget(row, 3)  # Updated index
+            interest_input = self.assets_table.cellWidget(row, 4)  # Updated index
+            date_input = self.assets_table.cellWidget(row, 5)  # Updated index
             
             amount = float(amount_input.text())
             interest = float(interest_input.text())
@@ -280,24 +284,41 @@ class LoanUpdatePage(StyledWidget):
         """Handle page load event and refresh customer data."""
         if event.type() == QEvent.Show:
             self.populate_customer_dropdown()
+            # Reset selection and hide elements
+            self.customer_dropdown.setCurrentIndex(0)
+            self.loan_table.setVisible(False)
+            self.customer_info_group.setVisible(False)
+            self.update_group.setVisible(False)
         super().showEvent(event)
 
     def populate_customer_dropdown(self):
         """Populate the dropdown with the latest customer data."""
         self.customer_dropdown.clear()
+        # Add the initial placeholder
+        self.customer_dropdown.addItem("Select a customer", None)
+        
         customers = DatabaseManager.get_all_customers()
         if customers:
-            for customer_id, name, account_number in customers:
+            for customer_id, name, phone in customers:
                 self.customer_dropdown.addItem(f"{name}", customer_id)
-        else:
-            self.customer_dropdown.addItem("No customers found")
 
     def on_customer_selected(self, index):
         """Display loans for the selected customer."""
-        if index < 0:
-            return
-
+        # Get the customer_id from the current selection
         self.selected_customer_id = self.customer_dropdown.currentData()
+        
+        # Show/hide elements based on selection
+        has_selection = self.selected_customer_id is not None
+        self.loan_table.setVisible(has_selection)
+        self.customer_info_group.setVisible(has_selection)
+        
+        # Clear tables if no selection
+        if not has_selection:
+            self.loan_table.setRowCount(0)
+            self.update_group.setVisible(False)
+            return
+            
+        # Populate data if customer is selected
         self.populate_customer_info()
         self.populate_loans_table()
 
@@ -308,6 +329,9 @@ class LoanUpdatePage(StyledWidget):
             child = customer_info_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
+        
+        if not self.selected_customer_id:
+            return 
 
         customer_info = DatabaseManager.get_customer_by_id(self.selected_customer_id)
         if customer_info:
@@ -319,20 +343,36 @@ class LoanUpdatePage(StyledWidget):
 
     def populate_loans_table(self):
         """Populate the loan table with loans for the selected customer."""
-        self.loan_table.setRowCount(0)
-        loans = DatabaseManager.fetch_loans_for_customer(self.selected_customer_id)
-        for row_idx, loan in enumerate(loans):
-            self.loan_table.insertRow(row_idx)
-            for col_idx, value in enumerate(loan[:-2]):
-                if col_idx == 0:  # Date column
-                    value = datetime.strptime(value, "%Y-%m-%d")
-                    value = value.strftime("%d-%m-%Y")  # Removed time component
-                elif col_idx in (2, 3, 4):
-                    value = f"{float(value):,.2f}" if value else "0.00"
-                self.loan_table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
+        self.loan_table.setRowCount(0)  # Clear existing rows
+        
+        if not self.selected_customer_id:
+            return 
             
+        loans = DatabaseManager.fetch_loans_for_customer(self.selected_customer_id)
+        
+        if not loans:
+            return
+        
+        for row_idx, loan_data in enumerate(loans):
+            self.loan_table.insertRow(row_idx)
+            
+            # Unpack loan data
+            (loan_date, asset_descriptions, total_weight, loan_amount, 
+            amount_due, interest_amount, loan_account_number, loan_id, _) = loan_data
+            
+            # Format date
+            formatted_date = datetime.strptime(loan_date, "%Y-%m-%d").strftime("%d-%m-%Y")
+            
+            # Set table items
+            self.loan_table.setItem(row_idx, 0, QTableWidgetItem(formatted_date))
+            self.loan_table.setItem(row_idx, 1, QTableWidgetItem(asset_descriptions or ""))
+            self.loan_table.setItem(row_idx, 2, QTableWidgetItem(f"{float(total_weight):,.2f}" if total_weight else "0.00"))
+            self.loan_table.setItem(row_idx, 3, QTableWidgetItem(f"{float(loan_amount):,.2f}" if loan_amount else "0.00"))
+            self.loan_table.setItem(row_idx, 4, QTableWidgetItem(f"{float(amount_due):,.2f}" if amount_due else "0.00"))
+            
+            # Add update button
             update_button = QPushButton("Update Amount")
-            update_button.clicked.connect(lambda checked, lid=loan[-2]: self.show_update_section(lid))
+            update_button.clicked.connect(lambda checked, lid=loan_id: self.show_update_section(lid))
             self.loan_table.setCellWidget(row_idx, 5, update_button)
 
     def show_update_section(self, loan_id):
@@ -340,6 +380,7 @@ class LoanUpdatePage(StyledWidget):
         self.current_loan_id = loan_id
         self.update_group.setVisible(True)
         
+        # Populate both tables with loan data
         self.populate_assets_table(loan_id)
         self.populate_repayment_table(loan_id)
 
@@ -382,3 +423,4 @@ class LoanUpdatePage(StyledWidget):
     def cancel_update(self):
         """Hide the update section."""
         self.update_group.setVisible(False)
+        self.current_loan_id = None  # Reset the current loan ID

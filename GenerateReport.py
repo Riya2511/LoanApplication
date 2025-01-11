@@ -20,6 +20,11 @@ class GenerateReport(StyledWidget):
         self.assets_table = None
         self.loan_payments_table = None
         self.init_ui()
+        
+        # Hide elements initially
+        self.customer_info_group.setVisible(False)
+        self.loan_details_table.setVisible(False)
+        self.generate_pdf_button.setEnabled(False)
 
     def init_ui(self):
         # Customer Selection Section with Search Functionality
@@ -34,6 +39,9 @@ class GenerateReport(StyledWidget):
         customer_layout.addWidget(self.customer_dropdown)
         customer_layout.addWidget(self.customer_search)
         self.content_layout.addLayout(customer_layout)
+
+        # Add initial placeholder item
+        self.customer_dropdown.addItem("Select a customer", None)
 
         # Customer Information Group Box
         self.customer_info_group = QGroupBox("Customer Information")
@@ -51,12 +59,13 @@ class GenerateReport(StyledWidget):
         self.customer_info_group.setLayout(customer_info_layout)
         self.content_layout.addWidget(self.customer_info_group)
 
-        # Loan Details Table
+       # Update Loan Details Table headers
         self.loan_details_table = QTableWidget()
-        self.loan_details_table.setColumnCount(6)
-        self.loan_details_table.setHorizontalHeaderLabels(
-            ["Loan Date", "Total Assets", "Total Weight (g)", "Total Amount (₹)", "Amount Due (₹)", ""]
-        )
+        self.loan_details_table.setColumnCount(7)  # Increased to include loan_account_number
+        self.loan_details_table.setHorizontalHeaderLabels([
+            "Loan Date", "Loan Account Number", "Total Assets", "Total Weight (g)", 
+            "Total Amount (₹)", "Amount Due (₹)", ""
+        ])
         self.loan_details_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.loan_details_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.loan_details_table.setSelectionMode(QTableWidget.SingleSelection)
@@ -68,11 +77,11 @@ class GenerateReport(StyledWidget):
         self.update_group.setVisible(False)
         update_layout = QVBoxLayout()
 
-        # Assets Table
+        # Update Assets Table headers
         self.assets_table = QTableWidget()
-        self.assets_table.setColumnCount(4)  # Increased column count to 4
+        self.assets_table.setColumnCount(3)  # Reduced column count
         self.assets_table.setHorizontalHeaderLabels([
-            "Loan Account Number", "Reference Id", "Asset Description", "Weight (g)"
+            "Reference Id", "Asset Description", "Weight (g)"
         ])
         self.assets_table.setColumnWidth(0, 250)
         update_layout.addWidget(self.assets_table)
@@ -130,12 +139,11 @@ class GenerateReport(StyledWidget):
         self.assets_table.setRowCount(0)
         assets = DatabaseManager.fetch_loan_assets(loan_id)
         
-        for row_idx, (description, weight, loan_account_number, reference_id) in enumerate(assets):
+        for row_idx, (reference_id, description, weight) in enumerate(assets):
             self.assets_table.insertRow(row_idx)
-            self.assets_table.setItem(row_idx, 0, QTableWidgetItem(description))
-            self.assets_table.setItem(row_idx, 1, QTableWidgetItem(f"{weight}"))
-            self.assets_table.setItem(row_idx, 2, QTableWidgetItem(str(loan_account_number)))
-            self.assets_table.setItem(row_idx, 3, QTableWidgetItem(str(reference_id)))
+            self.assets_table.setItem(row_idx, 0, QTableWidgetItem(str(reference_id)))
+            self.assets_table.setItem(row_idx, 1, QTableWidgetItem(description))
+            self.assets_table.setItem(row_idx, 2, QTableWidgetItem(f"{weight}"))
 
     def populate_loan_payments_table(self, loan_id):
         """Populate the loan payments table with payment history."""
@@ -176,21 +184,31 @@ class GenerateReport(StyledWidget):
         """Handle page load event and refresh customer data."""
         if event.type() == QEvent.Show:
             self.populate_customer_dropdown()
+            # Reset selection and hide elements
+            self.customer_dropdown.setCurrentIndex(0)
+            self.customer_info_group.setVisible(False)
+            self.loan_details_table.setVisible(False)
+            self.update_group.setVisible(False)
+            self.generate_pdf_button.setEnabled(False)
         super().showEvent(event)
 
     def populate_customer_dropdown(self):
         """Populate the dropdown with the latest customer data."""
         self.customer_dropdown.clear()
+        # Add the initial placeholder
+        self.customer_dropdown.addItem("Select a customer", None)
+        
         customers = DatabaseManager.get_all_customers()
         if customers:
             for customer_id, name, account_number in customers:
                 self.customer_dropdown.addItem(f"{name}", customer_id)
-        else:
-            self.customer_dropdown.addItem("No customers found")
 
     def filter_customers(self, text):
         """Filter customers based on search text."""
         self.customer_dropdown.clear()
+        # Always add the initial placeholder
+        self.customer_dropdown.addItem("Select a customer", None)
+        
         customers = DatabaseManager.get_all_customers()
         
         filtered_customers = [
@@ -201,15 +219,24 @@ class GenerateReport(StyledWidget):
         if filtered_customers:
             for customer_id, name, account_number in filtered_customers:
                 self.customer_dropdown.addItem(f"{name} - {account_number}", customer_id)
-        else:
-            self.customer_dropdown.addItem("No matching customers found")
 
     def on_customer_selected(self, index):
         """Display customer information and loans when a customer is selected."""
-        if index < 0:
-            return
-
         self.selected_customer_id = self.customer_dropdown.currentData()
+        
+        # Show/hide elements based on selection
+        has_selection = self.selected_customer_id is not None
+        self.customer_info_group.setVisible(has_selection)
+        self.loan_details_table.setVisible(has_selection)
+        self.generate_pdf_button.setEnabled(has_selection)
+        
+        # Clear tables if no selection
+        if not has_selection:
+            self.loan_details_table.setRowCount(0)
+            self.update_group.setVisible(False)
+            return
+            
+        # Populate data if customer is selected
         self.populate_customer_info()
         self.populate_loans_table()
 
@@ -231,29 +258,44 @@ class GenerateReport(StyledWidget):
 
     def populate_loans_table(self):
         """Populate the loan table with loans for the selected customer."""
-        self.loan_details_table.setRowCount(0)
+        self.loan_details_table.setRowCount(0)  # Clear existing rows
+        
+        if not self.selected_customer_id:
+            return
+            
         loans = DatabaseManager.fetch_loans_for_customer(self.selected_customer_id)
+        
+        if not loans:
+            return
         
         for row_idx, loan in enumerate(loans):
             self.loan_details_table.insertRow(row_idx)
-            for col_idx, value in enumerate(loan[:-2]):
-                if col_idx == 0:
-                    value = datetime.strptime(value, "%Y-%m-%d")
-                    value = value.strftime("%d-%m-%Y")
-                elif col_idx in (2, 3, 4):
-                    value = f"{float(value):,.2f}" if value else "0.00"
-                self.loan_details_table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
+            
+            # Reorganize columns to include loan_account_number
+            loan_date = datetime.strptime(loan[0], "%Y-%m-%d").strftime("%d-%m-%Y")
+            loan_account_number = loan[6]  # Get loan_account_number from the tuple
+            asset_descriptions = loan[1]
+            total_weight = f"{float(loan[2]):,.2f}" if loan[2] else "0.00"
+            loan_amount = f"{float(loan[3]):,.2f}" if loan[3] else "0.00"
+            amount_due = f"{float(loan[4]):,.2f}" if loan[4] else "0.00"
+            
+            # Set values in the table
+            self.loan_details_table.setItem(row_idx, 0, QTableWidgetItem(loan_date))
+            self.loan_details_table.setItem(row_idx, 1, QTableWidgetItem(loan_account_number))
+            self.loan_details_table.setItem(row_idx, 2, QTableWidgetItem(asset_descriptions))
+            self.loan_details_table.setItem(row_idx, 3, QTableWidgetItem(total_weight))
+            self.loan_details_table.setItem(row_idx, 4, QTableWidgetItem(loan_amount))
+            self.loan_details_table.setItem(row_idx, 5, QTableWidgetItem(amount_due))
             
             view_button = QPushButton("View More")
-            view_button.clicked.connect(lambda checked, lid=loan[-2]: self.show_loan_details(lid))
-            self.loan_details_table.setCellWidget(row_idx, 5, view_button)
+            view_button.clicked.connect(lambda checked, lid=loan[7]: self.show_loan_details(lid))
+            self.loan_details_table.setCellWidget(row_idx, 6, view_button)
 
     def generate_pdf_report(self):
         """Generate a comprehensive PDF report for the selected customer."""
         if not self.selected_customer_id:
             QMessageBox.warning(self, "Error", "Please select a customer first.")
             return
-
         try:
             customer_info = DatabaseManager.get_customer_by_id(self.selected_customer_id)
             loans = DatabaseManager.fetch_loans_for_customer(self.selected_customer_id)
@@ -280,6 +322,7 @@ class GenerateReport(StyledWidget):
                 pdf.set_font('DejaVuSans', '', 12)
                 loan_date = datetime.strptime(loan[0], "%Y-%m-%d")
                 pdf.cell(0, 10, f"Loan Date: {loan_date.strftime('%d-%m-%Y')}", 0, 1)
+                pdf.cell(0, 10, f"Loan Account Number: {loan[6]}", 0, 1)  # Add loan account number
                 pdf.cell(0, 10, f"Total Weight: {float(loan[2])} g", 0, 1)
                 pdf.cell(0, 10, f"Total Loan Amount: ₹{float(loan[3]):,.2f}", 0, 1)
                 pdf.cell(0, 10, f"Amount Due: ₹{float(loan[4]):,.2f}", 0, 1)
@@ -288,13 +331,12 @@ class GenerateReport(StyledWidget):
                 pdf.ln(5)
                 pdf.set_font('DejaVuSans', '', 12)
                 pdf.cell(0, 10, "Assets:", 0, 1)
-                assets = DatabaseManager.fetch_loan_assets(loan[-2])
+                assets = DatabaseManager.fetch_loan_assets(loan[7])  # Using loan_id
                 if assets:
-                    for desc, weight, loan_account_number, reference_id in assets:
-                        pdf.cell(0, 10, f"  Loan Account Description: {desc}", 0, 1)
-                        pdf.cell(0, 10, f"  Reference Id: {weight}g", 0, 1)
-                        pdf.cell(0, 10, f"  Asset Description: {loan_account_number}", 0, 1)
-                        pdf.cell(0, 10, f"  Weight (g): {reference_id}", 0, 1)
+                    for reference_id, desc, weight in assets:
+                        pdf.cell(0, 10, f"  Reference Id: {reference_id}", 0, 1)
+                        pdf.cell(0, 10, f"  Asset Description: {desc}", 0, 1)
+                        pdf.cell(0, 10, f"  Weight: {weight}g", 0, 1)
                         pdf.ln(2)
                 else:
                     pdf.cell(0, 10, "No assets found", 0, 1)
