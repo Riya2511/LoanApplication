@@ -81,5 +81,12 @@ class TermsAndConditionsDialog(QDialog):
         
         # Close button
         close_button = QPushButton("Close")
+        close_button.setStyleSheet("""
+            QDialog {
+                border: 2px solid #3498db;
+                border-radius: 15px; /* Rounded corners */
+                background-color: white;
+            }
+        """)
         close_button.clicked.connect(self.accept)
         layout.addWidget(close_button)

@@ -29,13 +29,13 @@ def run_pyinstaller():
         # logging.info(f"Auth File Exists: {os.path.exists(file_path)}")
         # logging.info(f"Auth File Readable: {os.access(file_path, os.R_OK)}")
 
-        # if not createAuthFile():
-        #     logging.error('Failed to create auth file. Ensure you are running on a pendrive.')
-        #     return False
+        if not createAuthFile():
+            logging.error('Failed to create auth file. Ensure you are running on a pendrive.')
+            return False
         font_file_path = os.getcwd() + "\\fonts\\DejaVuSans.ttf"
         # command = fr'pyinstaller --onefile --windowed --distpath . --add-data=".auth;.auth" --add-data="{font_file_path};fonts\DejaVuSans.ttf" --name LoanApplication app.py'
         # command = fr'pyinstaller --onefile --windowed --distpath . --add-data="{font_file_path};fonts\DejaVuSans.ttf" --name LoanApplication app.py'
-        command = fr'pyinstaller --onefile --distpath final/  --add-data="{font_file_path};fonts\DejaVuSans.ttf" --name LoanApplication app.py'
+        command = fr'pyinstaller --onefile --distpath final/ --name LoanApplication app.py'
         result = subprocess.run(command, capture_output=True, text=True)
         
         # Log stdout and stderr

@@ -360,14 +360,13 @@ class GenerateReport(StyledWidget):
             loans = DatabaseManager.fetch_loans_for_customer(self.selected_customer_id)
 
             pdf = FPDF()
-            pdf.add_font('DejaVuSans', '', 'fonts\\DejaVuSans.ttf', uni=True)
             
             pdf.add_page()
-            pdf.set_font('DejaVuSans', '', 16)
+            pdf.set_font('Arial', 'B', 16)
             pdf.cell(0, 10, "Customer Loan Report", 0, 1)
 
             # Customer Information
-            pdf.set_font('DejaVuSans', '', 12)
+            pdf.set_font('Arial', '', 12)
             pdf.cell(0, 10, f"Name: {customer_info.get('name', 'N/A')}", 0, 1)
             pdf.cell(0, 10, f"Phone: {customer_info.get('phone', 'N/A')}", 0, 1)
             pdf.cell(0, 10, f"Address: {customer_info.get('address', 'N/A')}", 0, 1)
@@ -375,10 +374,10 @@ class GenerateReport(StyledWidget):
             # Loan Details
             for loan in loans:
                 pdf.ln(10)
-                pdf.set_font('DejaVuSans', '', 14)
+                pdf.set_font('Arial', 'B', 14)
                 pdf.cell(0, 10, "Loan Details", 0, 1)
                 
-                pdf.set_font('DejaVuSans', '', 12)
+                pdf.set_font('Arial', '', 12)
                 loan_date = datetime.strptime(loan[0], "%Y-%m-%d")
                 pdf.cell(0, 10, f"Loan Date: {loan_date.strftime('%d-%m-%Y')}", 0, 1)
                 pdf.cell(0, 10, f"Loan Account Number: {loan[6]}", 0, 1)  # Add loan account number
@@ -388,9 +387,10 @@ class GenerateReport(StyledWidget):
 
                 # Add assets
                 pdf.ln(5)
-                pdf.set_font('DejaVuSans', '', 12)
+                pdf.set_font('Arial', 'B', 12)
                 pdf.cell(0, 10, "Assets:", 0, 1)
                 assets = DatabaseManager.fetch_loan_assets(loan[7])  # Using loan_id
+                pdf.set_font('Arial', '', 12)
                 if assets:
                     for reference_id, desc, weight in assets:
                         pdf.cell(0, 10, f"  Reference Id: {reference_id}", 0, 1)
@@ -402,10 +402,11 @@ class GenerateReport(StyledWidget):
 
                 # Add loan payments
                 pdf.ln(5)
+                pdf.set_font('Arial', 'B', 12)
                 pdf.cell(0, 10, "Payment History:", 0, 1)
                 payments = DatabaseManager.fetch_loan_payments(loan[-2])
+                pdf.set_font('Arial', '', 12)
                 if payments:
-                    pdf.set_font('DejaVuSans', '', 10)
                     for payment in payments:
                         payment_date = datetime.strptime(payment['payment_date'], "%Y-%m-%d")
                         pdf.cell(0, 10, f"Date: {payment_date.strftime('%d-%m-%Y')}", 0, 1)
@@ -427,4 +428,4 @@ class GenerateReport(StyledWidget):
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to generate report: {str(e)}")
-        
+            

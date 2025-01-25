@@ -12,12 +12,17 @@ from GenerateReport import GenerateReport
 from LoginScreen import LoginScreen
 from helper import verifyPendrive
 from terms_dialog import TermsAndConditionsDialog  # Import the dialog
+from binary_images import FAVICON_BASE64, LOGO_BASE64
+import base64
 
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Loan Management System")
-        favicon = QIcon("./favicon.png")
+        favicon_data = base64.b64decode(FAVICON_BASE64)
+        favicon_pixmap = QPixmap()
+        favicon_pixmap.loadFromData(favicon_data)
+        favicon = QIcon(favicon_pixmap)
         self.setWindowIcon(favicon)
         self.showMaximized()
         DatabaseManager.init_database()
@@ -31,9 +36,12 @@ class MainWindow(QWidget):
         header_layout = QHBoxLayout()
         
         # Logo (replace with your actual logo path)
+        logo_data = base64.b64decode(LOGO_BASE64)
+        logo_pixmap = QPixmap()
+        logo_pixmap.loadFromData(logo_data)
+        
         logo_label = QLabel()
-        logo_pixmap = QPixmap("./logo.png")  # Replace with actual path
-        logo_label.setPixmap(logo_pixmap.scaled(350, 30, transformMode=Qt.SmoothTransformation))
+        logo_label.setPixmap(logo_pixmap.scaled(250, 20, transformMode=Qt.SmoothTransformation))
         header_layout.addWidget(logo_label)
         
         header_layout.addStretch(1)
@@ -43,7 +51,7 @@ class MainWindow(QWidget):
         terms_button.setFixedHeight(30)
         terms_button.setFixedWidth(200)
         terms_button.setStyleSheet(
-            "background-color: #3498db; color: white"
+            "background-color: #3498db; color: white; border-radius: 15px;"
         )
         terms_button.clicked.connect(self.show_terms)
         header_layout.addWidget(terms_button)
