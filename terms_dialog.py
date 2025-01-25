@@ -63,8 +63,8 @@ class TermsAndConditionsDialog(QDialog):
 <p>12. <b>Amendments:</b> We reserve the right to modify these Terms and Conditions at any time. The User will be notified of any material changes, and continued use of the Software after such notification constitutes acceptance of the updated terms.
 </p>
 <p>13. <b>Contact Information:</b> For any questions or concerns regarding these Terms and Conditions, please contact us at:
-    <p><b>Email: </b></p>
-    <p><b>Phone No.: +91- </b></p>
+    <p><b>Email: <a href="mailto:assist@websculptors.in">assist@websculptors.in</a></b></p>
+    <p><b>Phone No.: +91-8668900707</b></p>
 </p>
 
 <p><b>By using the Software, you acknowledge that you have read, understood, and agree to be bound by these Terms and Conditions.</b></p>
