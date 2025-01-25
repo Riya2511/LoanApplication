@@ -17,7 +17,7 @@ class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Loan Management System")
-        favicon = QIcon("./websculptors.jpg")
+        favicon = QIcon("./favicon.png")
         self.setWindowIcon(favicon)
         self.showMaximized()
         DatabaseManager.init_database()
@@ -32,8 +32,8 @@ class MainWindow(QWidget):
         
         # Logo (replace with your actual logo path)
         logo_label = QLabel()
-        logo_pixmap = QPixmap("./websculptors.jpg")  # Replace with actual path
-        logo_label.setPixmap(logo_pixmap.scaled(350, 150, transformMode=Qt.SmoothTransformation))
+        logo_pixmap = QPixmap("./logo.png")  # Replace with actual path
+        logo_label.setPixmap(logo_pixmap.scaled(350, 30, transformMode=Qt.SmoothTransformation))
         header_layout.addWidget(logo_label)
         
         header_layout.addStretch(1)

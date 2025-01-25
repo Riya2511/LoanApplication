@@ -34,7 +34,8 @@ def run_pyinstaller():
         #     return False
         font_file_path = os.getcwd() + "\\fonts\\DejaVuSans.ttf"
         # command = fr'pyinstaller --onefile --windowed --distpath . --add-data=".auth;.auth" --add-data="{font_file_path};fonts\DejaVuSans.ttf" --name LoanApplication app.py'
-        command = fr'pyinstaller --onefile --windowed --distpath . --add-data="{font_file_path};fonts\DejaVuSans.ttf" --name LoanApplication app.py'
+        # command = fr'pyinstaller --onefile --windowed --distpath . --add-data="{font_file_path};fonts\DejaVuSans.ttf" --name LoanApplication app.py'
+        command = fr'pyinstaller --onefile --distpath final/  --add-data="{font_file_path};fonts\DejaVuSans.ttf" --name LoanApplication app.py'
         result = subprocess.run(command, capture_output=True, text=True)
         
         # Log stdout and stderr

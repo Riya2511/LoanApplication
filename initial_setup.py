@@ -27,7 +27,7 @@ def getPendriveSerialNumber():
     except Exception as e:
         print(f"Unexpected error: {e}")
         return None
-
+    
 def createAuthFile(serialNumber=None):
     try:
         if serialNumber is None:
@@ -42,9 +42,9 @@ def createAuthFile(serialNumber=None):
             print("Could not create auth file: No serial number found")
             return False
         # current_drive = os.path.splitdrive(os.path.abspath(__file__))[0] + "\\"
-        auth_file_path = os.path.join(os.getcwd() + '\\', ".auth")
+        auth_file_path = os.path.join(os.getcwd() + '\\', "auth.py")
         with open(auth_file_path, 'w') as f:
-            f.write(hashedSerial)
+            f.write(f'auth = "{hashedSerial}"')
         ctypes.windll.kernel32.SetFileAttributesW(auth_file_path, 0x2)
         
         print("Authentication file created successfully")
