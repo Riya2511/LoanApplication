@@ -15,10 +15,10 @@ class HomePage(StyledWidget):
         self.content_layout.addWidget(title)
 
         options = [
-            ("Register Customer", 1),
-            ("Register Loan", 2),
-            ("Repay Loan", 3),
-            ("Generate Report", 4)
+            ("Register Customer", 2),
+            ("Register Loan", 3),
+            ("Repay Loan", 4),
+            ("Generate Report", 5)
         ]
 
         grid_layout = QHBoxLayout()

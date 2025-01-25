@@ -5,15 +5,13 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 import os
 import wmi
-import win32api
 import win32file
 import hashlib
-import ctypes
 
 class StyledWidget(QWidget):
     def __init__(self, parent=None, with_back_button=False, title="", switch_page_callback=None):
         super().__init__(parent)
-        self.switch_page = switch_page_callback
+        self.switch_page_callback = switch_page_callback
         self.setup_ui(with_back_button, title)
 
     def setup_ui(self, with_back_button=False, title=""):
@@ -52,10 +50,10 @@ class StyledWidget(QWidget):
         self.setLayout(main_layout)
 
         # Top section with back button and title
-        if with_back_button and self.switch_page:
+        if with_back_button and self.switch_page_callback:
             top_layout = QHBoxLayout()
             back_btn = QPushButton("← Back")
-            back_btn.clicked.connect(lambda: self.switch_page(0))  # Always go back to home
+            back_btn.clicked.connect(self.back_button_clicked)
             
             title_label = QLabel(title)
             title_label.setAlignment(Qt.AlignCenter)
@@ -84,6 +82,11 @@ class StyledWidget(QWidget):
 
         self.content_layout = content_layout
         self.scroll_content = scroll_content
+
+    def back_button_clicked(self):
+        # Always go to HomePage (index 1)
+        if self.switch_page_callback:
+            self.switch_page_callback(1)
 
 def hashSerialNumber(serialNumber: str):
     dataEncoded = str(serialNumber).encode("utf-8")

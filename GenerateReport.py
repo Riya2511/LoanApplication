@@ -27,6 +27,57 @@ class GenerateReport(StyledWidget):
         self.generate_pdf_button.setEnabled(False)
 
     def init_ui(self):
+        # Summary Section (Total Customers and Loan Amount Due)
+        summary_layout = QVBoxLayout()
+
+        # Create a container for styling
+        summary_container = QGroupBox()
+        summary_container.setStyleSheet("""
+            QGroupBox {
+                border: 2px solid #4CAF50;
+                border-radius: 10px;
+                background-color: #f9f9f9;
+                margin: 10px 0;
+                padding: 10px;
+            }
+        """)
+
+        summary_inner_layout = QVBoxLayout()
+
+        # Labels with enhanced styling
+        self.total_customers_label = QLabel("Total Customers: 0")
+        self.total_loan_due_label = QLabel("Total Loan Amount Due (₹): 0.00")
+
+        self.total_customers_label.setStyleSheet("""
+            font-weight: bold; 
+            font-size: 22px; 
+            color: #333; 
+            text-align: center;
+        """)
+        self.total_loan_due_label.setStyleSheet("""
+            font-weight: bold; 
+            font-size: 22px; 
+            color: #FF5722; 
+            text-align: center;
+        """)
+
+        # Add labels to the inner layout
+        summary_inner_layout.addWidget(self.total_customers_label, alignment=Qt.AlignCenter)
+        summary_inner_layout.addWidget(self.total_loan_due_label, alignment=Qt.AlignCenter)
+
+        # Add inner layout to the container
+        summary_container.setLayout(summary_inner_layout)
+
+        # Center the summary container
+        summary_layout.addWidget(summary_container, alignment=Qt.AlignCenter)
+
+        # Add the summary layout to the main content layout
+        self.content_layout.addLayout(summary_layout)
+
+        # Call method to refresh summary data
+        self.refresh_summary_data()
+
+
         # Customer Selection Section with Search Functionality
         customer_layout = QHBoxLayout()
         self.customer_dropdown = QComboBox()
@@ -133,6 +184,14 @@ class GenerateReport(StyledWidget):
         self.customer_dropdown.currentIndexChanged.connect(self.on_customer_selected)
 
         self.content_layout.addStretch(1)
+
+    def refresh_summary_data(self):
+        """Refresh the summary statistics for total customers and loan amount due."""
+        total_customers, total_loan_due = DatabaseManager.get_summary_stats()
+
+        # Update the labels
+        self.total_customers_label.setText(f"Total Customers: {total_customers}")
+        self.total_loan_due_label.setText(f"Total Loan Amount Due (₹): {total_loan_due:,.2f}")
 
     def populate_assets_table(self, loan_id):
         """Populate assets table with loan assets."""

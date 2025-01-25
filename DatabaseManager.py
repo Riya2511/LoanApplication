@@ -78,6 +78,20 @@ class DatabaseManager:
                 GROUP BY l.loan_id;
             ''')
 
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS SystemUsers (
+                    user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    password_hash TEXT NOT NULL
+                );
+            ''')
+
+            cursor.execute("SELECT COUNT(*) FROM SystemUsers")
+            if cursor.fetchone()[0] == 0:
+                # Insert a default password (hash for "admin")
+                import hashlib
+                default_password = hashlib.sha256("admin".encode()).hexdigest()
+                cursor.execute("INSERT INTO SystemUsers (password_hash) VALUES (?)", (default_password,))
+
             conn.commit()
         except sqlite3.Error as e:
             print(f"Database initialization error: {e}")
@@ -126,6 +140,45 @@ class DatabaseManager:
         except sqlite3.Error as e:
             print(f"Database error: {e} {query}")
             return []
+        finally:
+            if conn:
+                conn.close()
+
+    @staticmethod
+    def verify_password(input_password):
+        """Verify the provided password."""
+        try:
+            conn = DatabaseManager.create_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT password_hash FROM SystemUsers LIMIT 1")
+            stored_hash = cursor.fetchone()[0]
+
+            # Compare hash of input password with stored hash
+            import hashlib
+            input_hash = hashlib.sha256(input_password.encode()).hexdigest()
+            return input_hash == stored_hash
+        except sqlite3.Error as e:
+            print(f"Database error while verifying password: {e}")
+            return False
+        finally:
+            if conn:
+                conn.close()
+
+    @staticmethod
+    def update_password(new_password):
+        """Update the system password."""
+        try:
+            conn = DatabaseManager.create_connection()
+            cursor = conn.cursor()
+
+            # Hash the new password
+            import hashlib
+            new_hash = hashlib.sha256(new_password.encode()).hexdigest()
+            cursor.execute("UPDATE SystemUsers SET password_hash = ? WHERE user_id = 1", (new_hash,))
+
+            conn.commit()
+        except sqlite3.Error as e:
+            print(f"Database error while updating password: {e}")
         finally:
             if conn:
                 conn.close()
@@ -427,6 +480,30 @@ class DatabaseManager:
                 conn.rollback()
             return False, f"Unexpected error: {str(e)}"
             
+        finally:
+            if conn:
+                conn.close()
+    
+    @staticmethod
+    def get_summary_stats():
+        """Fetch total customers and total loan amount due."""
+        query_customers = "SELECT COUNT(*) FROM Customers"
+        query_loan_due = "SELECT SUM(loan_amount_due) FROM LoanView"
+
+        try:
+            conn = DatabaseManager.create_connection()
+            cursor = conn.cursor()
+
+            cursor.execute(query_customers)
+            total_customers = cursor.fetchone()[0]
+
+            cursor.execute(query_loan_due)
+            total_loan_due = cursor.fetchone()[0] or 0  # Handle NULL with 0
+
+            return total_customers, total_loan_due
+        except sqlite3.Error as e:
+            print(f"Database error while fetching summary stats: {e}")
+            return 0, 0
         finally:
             if conn:
                 conn.close()
