@@ -14,7 +14,7 @@ class DatabaseManager:
                     customer_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name VARCHAR NOT NULL,
                     phone VARCHAR UNIQUE,
-                    address TEXT NOT NULL,
+                    address TEXT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );

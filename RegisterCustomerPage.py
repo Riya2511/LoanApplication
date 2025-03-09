@@ -83,13 +83,15 @@ class RegisterCustomerPage(StyledWidget):
 
         # Phone validation
         phone = row[2].strip()
-        if not re.match(r'^\d{10}$', phone):
-            errors.append(f"Row {row_number}: Invalid phone number (must be 10 digits)")
+        if phone:
+            if not re.match(r'^\d{10}$', phone):
+                errors.append(f"Row {row_number}: Invalid phone number (must be 10 digits)")
 
         # Address validation
         address = row[3].strip()
-        if not address or len(address) < 5:
-            errors.append(f"Row {row_number}: Invalid address (must be at least 5 characters)")
+        if address:
+            if not address or len(address) < 5:
+                errors.append(f"Row {row_number}: Invalid address (must be at least 5 characters)")
 
         return errors, (name, phone, address)
 
@@ -204,12 +206,12 @@ class RegisterCustomerPage(StyledWidget):
 
         # Address validation
         address = self.address_input.text().strip()
-        if not address:
-            self.address_error.setText("Address is required")
-            is_valid = False
-        elif len(address) < 5:
-            self.address_error.setText("Address is too short")
-            is_valid = False
+        if address:
+            # self.address_error.setText("Address is required")
+            # is_valid = False
+            if len(address) < 5:
+                self.address_error.setText("Address is too short")
+                is_valid = False
 
         return is_valid
 
