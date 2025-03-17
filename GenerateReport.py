@@ -134,9 +134,9 @@ class GenerateReport(StyledWidget):
 
         # Update Loan Details Table headers
         self.loan_details_table = QTableWidget()
-        self.loan_details_table.setColumnCount(7)  # Includes loan_account_number
+        self.loan_details_table.setColumnCount(7)  # Includes registered_reference_id
         self.loan_details_table.setHorizontalHeaderLabels([
-            "Loan Date", "Loan Account Number", "Total Assets", "Total Weight (g)", 
+            "Loan Date", "Registered Reference Id", "Total Assets", "Total Weight (g)", 
             "Total Amount (₹)", "Amount Due (₹)", ""
         ])
         self.loan_details_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -250,7 +250,7 @@ class GenerateReport(StyledWidget):
             for row_idx, repayment in enumerate(repayments):
                 self.loan_payments_table.insertRow(row_idx)
                 
-                payment_date = datetime.strptime(repayment['payment_date'], "%Y-%m-%d")
+                payment_date = datetime.strptime(repayment['payment_date'].replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d")
                 formatted_date = payment_date.strftime("%d-%m-%Y")
                 
                 self.loan_payments_table.setItem(row_idx, 0, QTableWidgetItem(formatted_date))
@@ -371,8 +371,8 @@ class GenerateReport(StyledWidget):
             self.loan_details_table.insertRow(row_idx)
             
             # Format the loan data for display
-            loan_date = datetime.strptime(loan[0], "%Y-%m-%d").strftime("%d-%m-%Y")
-            loan_account_number = loan[6]  # Get loan_account_number from the tuple
+            loan_date = datetime.strptime((loan[0]).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d").strftime("%d-%m-%Y")
+            registered_reference_id = loan[6]  # Get registered_reference_id from the tuple
             asset_descriptions = loan[1]
             total_weight = f"{float(loan[2]):,.2f}" if loan[2] else "0.00"
             loan_amount = f"{float(loan[3]):,.2f}" if loan[3] else "0.00"
@@ -380,7 +380,7 @@ class GenerateReport(StyledWidget):
             
             # Set values in the table
             self.loan_details_table.setItem(row_idx, 0, QTableWidgetItem(loan_date))
-            self.loan_details_table.setItem(row_idx, 1, QTableWidgetItem(loan_account_number))
+            self.loan_details_table.setItem(row_idx, 1, QTableWidgetItem(registered_reference_id))
             self.loan_details_table.setItem(row_idx, 2, QTableWidgetItem(asset_descriptions))
             self.loan_details_table.setItem(row_idx, 3, QTableWidgetItem(total_weight))
             self.loan_details_table.setItem(row_idx, 4, QTableWidgetItem(loan_amount))
@@ -400,9 +400,21 @@ class GenerateReport(StyledWidget):
             loans = DatabaseManager.fetch_loans_for_customer_to_generate_report(self.selected_customer_id, self.selected_year)
 
             pdf = FPDF()
-            
             pdf.add_page()
             pdf.set_font('Arial', 'B', 16)
+            
+            # Helper function to sanitize text - use ASCII only, completely remove problematic characters
+            def sanitize_text(text):
+                if text is None:
+                    return "N/A"
+                try:
+                    # Convert to string first
+                    text = str(text)
+                    # Remove all non-ASCII characters
+                    return ''.join(char for char in text if ord(char) < 128)
+                except:
+                    # If any error, return safe text
+                    return "Text contains unsupported characters"
             
             # Add report title with year filter if applicable
             if self.selected_year:
@@ -412,9 +424,9 @@ class GenerateReport(StyledWidget):
 
             # Customer Information
             pdf.set_font('Arial', '', 12)
-            pdf.cell(0, 10, f"Name: {customer_info.get('name', 'N/A')}", 0, 1)
-            pdf.cell(0, 10, f"Phone: {customer_info.get('phone', 'N/A')}", 0, 1)
-            pdf.cell(0, 10, f"Address: {customer_info.get('address', 'N/A')}", 0, 1)
+            pdf.cell(0, 10, f"Name: {sanitize_text(customer_info.get('name', 'N/A'))}", 0, 1)
+            pdf.cell(0, 10, f"Phone: {sanitize_text(customer_info.get('phone', 'N/A'))}", 0, 1)
+            pdf.cell(0, 10, f"Address: {sanitize_text(customer_info.get('address', 'N/A'))}", 0, 1)
 
             # Loan Details
             for loan in loans:
@@ -423,56 +435,128 @@ class GenerateReport(StyledWidget):
                 pdf.cell(0, 10, "Loan Details", 0, 1)
                 
                 pdf.set_font('Arial', '', 12)
-                loan_date = datetime.strptime(loan[0], "%Y-%m-%d")
-                pdf.cell(0, 10, f"Loan Date: {loan_date.strftime('%d-%m-%Y')}", 0, 1)
-                pdf.cell(0, 10, f"Loan Account Number: {loan[6]}", 0, 1)
-                pdf.cell(0, 10, f"Total Weight: {float(loan[2])} g", 0, 1)
-                pdf.cell(0, 10, f"Total Loan Amount: ₹{float(loan[3]):,.2f}", 0, 1)
-                pdf.cell(0, 10, f"Amount Due: ₹{float(loan[4]):,.2f}", 0, 1)
+                # Sanitize date format
+                try:
+                    loan_date = datetime.strptime(str(loan[0]).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d")
+                    formatted_date = loan_date.strftime('%d-%m-%Y')
+                except:
+                    formatted_date = "Invalid date"
+                    
+                pdf.cell(0, 10, f"Loan Date: {formatted_date}", 0, 1)
+                pdf.cell(0, 10, f"Registered Reference Id: {sanitize_text(str(loan[6]))}", 0, 1)
+                
+                # Handle numeric values safely
+                try:
+                    weight = float(loan[2]) if loan[2] else 0
+                    pdf.cell(0, 10, f"Total Weight: {weight} g", 0, 1)
+                except:
+                    pdf.cell(0, 10, "Total Weight: Error calculating", 0, 1)
+                    
+                try:
+                    loan_amount = float(loan[3]) if loan[3] else 0
+                    pdf.cell(0, 10, f"Total Loan Amount: Rs{loan_amount:,.2f}", 0, 1)
+                except:
+                    pdf.cell(0, 10, "Total Loan Amount: Error calculating", 0, 1)
+                    
+                try:
+                    due_amount = float(loan[4]) if loan[4] else 0
+                    pdf.cell(0, 10, f"Amount Due: Rs{due_amount:,.2f}", 0, 1)
+                except:
+                    pdf.cell(0, 10, "Amount Due: Error calculating", 0, 1)
 
                 # Add assets
                 pdf.ln(5)
                 pdf.set_font('Arial', 'B', 12)
                 pdf.cell(0, 10, "Assets:", 0, 1)
-                assets = DatabaseManager.fetch_loan_assets(loan[7])  # Using loan_id
-                pdf.set_font('Arial', '', 12)
-                if assets:
-                    for desc, weight in assets:
-                        pdf.cell(0, 10, f"  Asset Description: {desc}", 0, 1)
-                        pdf.cell(0, 10, f"  Weight: {weight}g", 0, 1)
-                        pdf.ln(2)
-                else:
-                    pdf.cell(0, 10, "No assets found", 0, 1)
+                try:
+                    assets = DatabaseManager.fetch_loan_assets(loan[7])  # Using loan_id
+                    pdf.set_font('Arial', '', 12)
+                    if assets:
+                        for desc, weight in assets:
+                            pdf.cell(0, 10, f"  Asset Description: {sanitize_text(str(desc))}", 0, 1)
+                            try:
+                                weight_val = float(weight) if weight else 0
+                                pdf.cell(0, 10, f"  Weight: {weight_val}g", 0, 1)
+                            except:
+                                pdf.cell(0, 10, "  Weight: Error calculating", 0, 1)
+                            pdf.ln(2)
+                    else:
+                        pdf.cell(0, 10, "No assets found", 0, 1)
+                except Exception as asset_error:
+                    pdf.cell(0, 10, f"Error retrieving assets: {sanitize_text(str(asset_error))}", 0, 1)
 
                 # Add loan payments
                 pdf.ln(5)
                 pdf.set_font('Arial', 'B', 12)
                 pdf.cell(0, 10, "Payment History:", 0, 1)
-                payments = DatabaseManager.fetch_loan_payments(loan[7])
-                pdf.set_font('Arial', '', 12)
-                if payments:
-                    for payment in payments:
-                        payment_date = datetime.strptime(payment['payment_date'], "%Y-%m-%d")
-                        pdf.cell(0, 10, f"Date: {payment_date.strftime('%d-%m-%Y')}", 0, 1)
-                        pdf.cell(0, 10, f"Asset: {payment.get('asset_description', 'N/A')}", 0, 1)
-                        pdf.cell(0, 10, f"Amount Paid: ₹{float(payment['payment_amount']):,.2f}", 0, 1)
-                        pdf.cell(0, 10, f"Interest Paid: ₹{float(payment['interest_amount']):,.2f}", 0, 1)
-                        pdf.cell(0, 10, f"Remaining Amount: ₹{float(payment['amount_left']):,.2f}", 0, 1)
-                        pdf.ln(5)
-                else:
-                    pdf.cell(0, 10, "No payments recorded", 0, 1)
+                try:
+                    payments = DatabaseManager.fetch_loan_payments(loan[7])
+                    pdf.set_font('Arial', '', 12)
+                    if payments:
+                        for payment in payments:
+                            try:
+                                payment_date = datetime.strptime(
+                                    str(payment['payment_date']).replace('00:00:00', '').replace(' ', ''), 
+                                    "%Y-%m-%d"
+                                )
+                                formatted_payment_date = payment_date.strftime('%d-%m-%Y')
+                            except:
+                                formatted_payment_date = "Invalid date"
+                                
+                            pdf.cell(0, 10, f"Date: {formatted_payment_date}", 0, 1)
+                            pdf.cell(0, 10, f"Asset: {sanitize_text(str(payment.get('asset_description', 'N/A')))}", 0, 1)
+                            
+                            try:
+                                payment_amount = float(payment['payment_amount']) if payment['payment_amount'] else 0
+                                pdf.cell(0, 10, f"Amount Paid: Rs{payment_amount:,.2f}", 0, 1)
+                            except:
+                                pdf.cell(0, 10, "Amount Paid: Error calculating", 0, 1)
+                                
+                            try:
+                                interest_amount = float(payment['interest_amount']) if payment['interest_amount'] else 0
+                                pdf.cell(0, 10, f"Interest Paid: Rs{interest_amount:,.2f}", 0, 1)
+                            except:
+                                pdf.cell(0, 10, "Interest Paid: Error calculating", 0, 1)
+                                
+                            try:
+                                amount_left = float(payment['amount_left']) if payment['amount_left'] else 0
+                                pdf.cell(0, 10, f"Remaining Amount: Rs{amount_left:,.2f}", 0, 1)
+                            except:
+                                pdf.cell(0, 10, "Remaining Amount: Error calculating", 0, 1)
+                                
+                            pdf.ln(5)
+                    else:
+                        pdf.cell(0, 10, "No payments recorded", 0, 1)
+                except Exception as payment_error:
+                    pdf.cell(0, 10, f"Error retrieving payments: {sanitize_text(str(payment_error))}", 0, 1)
 
                 pdf.ln(10)
                 pdf.cell(0, 0, "_" * 50, 0, 1)  # Add separator line between loans
 
-            # Generate year-specific filename if applicable
-            if self.selected_year:
-                filename = f"customer_loan_report_{customer_info.get('name', 'unknown')}_{self.selected_year}_{datetime.now().strftime('%Y%m%d')}.pdf"
-            else:
-                filename = f"customer_loan_report_{customer_info.get('name', 'unknown')}_{datetime.now().strftime('%Y%m%d')}.pdf"
+            # Generate sanitized filename
+            safe_name = ''.join(char for char in str(customer_info.get('name', 'unknown')) if char.isalnum() or char in ' _-')
+            if not safe_name or safe_name.isspace():
+                safe_name = "unknown"
                 
-            pdf.output(filename)
-            QMessageBox.information(self, "Success", f"Report generated: {filename}")
+            if self.selected_year:
+                filename = f"customer_loan_report_{safe_name}_{self.selected_year}_{datetime.now().strftime('%Y%m%d')}.pdf"
+            else:
+                filename = f"customer_loan_report_{safe_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
+                
+            # Replace rupee symbol with "Rs" in the entire document
+            try:
+                pdf.output(filename)
+                QMessageBox.information(self, "Success", f"Report generated: {filename}")
+            except Exception as output_error:
+                error_msg = str(output_error)
+                QMessageBox.critical(self, "Error", f"Failed to write PDF: {error_msg}")
+                # Try with even safer filename if that was the issue
+                try:
+                    safe_filename = f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+                    pdf.output(safe_filename)
+                    QMessageBox.information(self, "Success", f"Report generated with safe name: {safe_filename}")
+                except Exception as last_error:
+                    QMessageBox.critical(self, "Critical Error", "Cannot generate PDF with any filename. Check file permissions.")
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to generate report: {str(e)}")

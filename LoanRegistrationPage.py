@@ -67,10 +67,10 @@ class LoanRegistrationPage(StyledWidget):
         """)
         loan_form_layout.addRow("Loan Date:", self.date_input)
 
-        # Add loan account number at loan level
+        # Add Registered Reference Id at loan level
         self.loan_account_input = QLineEdit()
-        self.loan_account_input.setPlaceholderText("Enter Loan Account Number")
-        loan_form_layout.addRow("Loan Account Number:", self.loan_account_input)
+        self.loan_account_input.setPlaceholderText("Enter Registered Reference Id")
+        loan_form_layout.addRow("Registered Reference Id:", self.loan_account_input)
         
         self.loan_amount_input = QLineEdit()
         self.loan_amount_input.setPlaceholderText("Enter Loan Amount (₹)")
@@ -103,10 +103,10 @@ class LoanRegistrationPage(StyledWidget):
         loans_layout = QVBoxLayout()
         
         self.loans_table = QTableWidget()
-        self.loans_table.setColumnCount(10)  # Increased to 10 for Loan Account Number and Delete Loan columns
+        self.loans_table.setColumnCount(10)  # Increased to 10 for Registered Reference Id and Delete Loan columns
         self.loans_table.setHorizontalHeaderLabels([
             "Loan Date", 
-            "Loan Account Number",  # New column
+            "Registered Reference Id",  # New column
             "Assets",
             "Total Weight (g)", 
             "Loan Amount (₹)", 
@@ -121,6 +121,7 @@ class LoanRegistrationPage(StyledWidget):
         self.loans_table.setSelectionMode(QTableWidget.SingleSelection)
         self.loans_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.loans_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)  # Assets column
+        self.loans_table.setColumnWidth(1, 180)
         self.loans_table.setAlternatingRowColors(True)
         self.loans_table.setStyleSheet("""
             QTableWidget {
@@ -155,9 +156,9 @@ class LoanRegistrationPage(StyledWidget):
             if loan_amount <= 0:
                 raise ValueError("Loan amount must be positive.")
 
-            loan_account_number = self.loan_account_input.text().strip()
-            if not loan_account_number:
-                raise ValueError("Loan account number cannot be empty.")
+            registered_reference_id = self.loan_account_input.text().strip()
+            if not registered_reference_id:
+                raise ValueError("Registered Reference Id cannot be empty.")
 
             asset_description = self.asset_description_input.text().strip()
             if not asset_description:
@@ -178,7 +179,7 @@ class LoanRegistrationPage(StyledWidget):
             return
         
         success, message = DatabaseManager.insert_loan_with_asset(
-            self.selected_customer_id, loan_amount, loan_date, loan_account_number, 
+            self.selected_customer_id, loan_amount, loan_date, registered_reference_id, 
             asset_description, asset_weight
         )
 
@@ -253,12 +254,24 @@ class LoanRegistrationPage(StyledWidget):
         self.loans_table.setRowCount(len(loans))
 
         for row, loan in enumerate(loans):
-            # Convert date format
-            date_parts = loan[0].split('-')
-            formatted_date = f"{date_parts[2]}-{date_parts[1]}-{date_parts[0]}" if len(date_parts) == 3 else loan[0]
+            # Handle date formatting correctly
+            date_str = loan[0]
+            if " 00:00:00" in date_str:
+                # Remove time portion if it exists
+                date_str = date_str.split(" ")[0]
+                
+            # Convert YYYY-MM-DD to DD-MM-YYYY format
+            try:
+                date_parts = date_str.split('-')
+                if len(date_parts) == 3:
+                    formatted_date = f"{date_parts[2]}-{date_parts[1]}-{date_parts[0]}"
+                else:
+                    formatted_date = date_str
+            except:
+                formatted_date = date_str
             
             self.loans_table.setItem(row, 0, QTableWidgetItem(formatted_date))
-            self.loans_table.setItem(row, 1, QTableWidgetItem(loan[6] or "N/A"))  # Loan Account Number
+            self.loans_table.setItem(row, 1, QTableWidgetItem(loan[6] or "N/A"))  # Registered Reference Id
             self.loans_table.setItem(row, 2, QTableWidgetItem(loan[1] or "N/A"))  # Assets
             self.loans_table.setItem(row, 3, QTableWidgetItem(f"{loan[2]:.2f}"))  # Total Weight
             self.loans_table.setItem(row, 4, QTableWidgetItem(f"{loan[3]:.2f}"))  # Loan Amount
@@ -307,6 +320,11 @@ class LoanRegistrationPage(StyledWidget):
             """)
             delete_button.clicked.connect(lambda _, loan_id=loan[7]: self.delete_loan(loan_id))
             self.loans_table.setCellWidget(row, 9, delete_button)  # Column 9 for Delete Button
+        
+        # Set column widths - make Registered Reference Id column wider
+        self.loans_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Interactive)
+        self.loans_table.setColumnWidth(1, 180)  # Make Registered Reference Id column wider
+        self.loans_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)  # Assets column
 
     def update_customer_info(self):
         # Clear existing widgets
@@ -364,8 +382,8 @@ class LoanRegistrationPage(StyledWidget):
         edit_loan_layout.addRow("Loan Date:", self.edit_date_input)
 
         self.edit_loan_account_input = QLineEdit()
-        self.edit_loan_account_input.setText(loan_details["loan_account_number"])
-        edit_loan_layout.addRow("Loan Account Number:", self.edit_loan_account_input)
+        self.edit_loan_account_input.setText(loan_details["registered_reference_id"])
+        edit_loan_layout.addRow("Registered Reference Id:", self.edit_loan_account_input)
 
         self.edit_loan_amount_input = QLineEdit()
         self.edit_loan_amount_input.setText(str(loan_details["loan_amount"]))
@@ -426,14 +444,14 @@ class LoanRegistrationPage(StyledWidget):
     def save_edited_loan(self, loan_id):
         try:
             loan_date = self.edit_date_input.date().toString("yyyy-MM-dd")
-            loan_account_number = self.edit_loan_account_input.text().strip()
+            registered_reference_id = self.edit_loan_account_input.text().strip()
             loan_amount = self.edit_loan_amount_input.text().strip()
             asset_description = self.edit_asset_description_input.text().strip()
             asset_weight = self.edit_asset_weight_input.text().strip()
 
             # Validate inputs
-            if not loan_account_number:
-                raise ValueError("Loan account number cannot be empty.")
+            if not registered_reference_id:
+                raise ValueError("Registered Reference Id cannot be empty.")
                 
             if not asset_description:
                 raise ValueError("Asset description cannot be empty.")
@@ -454,7 +472,7 @@ class LoanRegistrationPage(StyledWidget):
         # Update Loan and Asset details
         try:
             # Update the loan record
-            DatabaseManager.update_loan(loan_id, loan_date, loan_account_number, loan_amount)
+            DatabaseManager.update_loan(loan_id, loan_date, registered_reference_id, loan_amount)
             
             # Update the asset record
             DatabaseManager.update_loan_assets(loan_id, asset_description, asset_weight)

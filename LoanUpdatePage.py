@@ -27,8 +27,34 @@ class PaymentEditDialog(QDialog):
         self.date_edit = QDateEdit()
         self.date_edit.setDisplayFormat("dd-MM-yyyy")
         self.date_edit.setCalendarPopup(True)
-        payment_date = datetime.strptime(self.payment_data['payment_date'], "%Y-%m-%d")
-        self.date_edit.setDate(QDate(payment_date.year, payment_date.month, payment_date.day))
+
+        # Parse the date format
+        payment_date_str = self.payment_data['payment_date']
+        try:
+            # Split by spaces to separate date and time
+            date_part = payment_date_str.split()[0]
+            # Split the date part by hyphens
+            date_parts = date_part.split('-')
+            # Get year, month, day
+            if len(date_parts) >= 3:
+                year = int(date_parts[0])
+                month = int(date_parts[1])
+                day = int(date_parts[2])
+            else:
+                # Fallback to current date if can't parse
+                current_date = QDate.currentDate()
+                year = current_date.year()
+                month = current_date.month()
+                day = current_date.day()
+        except Exception:
+            # Fallback to current date if error
+            current_date = QDate.currentDate()
+            year = current_date.year()
+            month = current_date.month()
+            day = current_date.day()
+
+        # Set the date in the date editor
+        self.date_edit.setDate(QDate(year, month, day))
         form_layout.addRow("Payment Date:", self.date_edit)
         
         # Asset description
@@ -54,8 +80,14 @@ class PaymentEditDialog(QDialog):
         self.setLayout(layout)
 
     def get_updated_data(self):
+        date_obj = self.date_edit.date()
+        day = date_obj.day()
+        month = date_obj.month()
+        year = date_obj.year()
+        formatted_date = f"{day} 00:00:00-{month:02d}-{year}"  # Format as "22 00:00:00-06-2024"
+        
         return {
-            'payment_date': self.date_edit.date().toPyDate().strftime("%Y-%m-%d"),
+            'payment_date': formatted_date,
             'asset_description': self.asset_input.text(),
             'payment_amount': float(self.amount_input.text()),
             'interest_amount': float(self.interest_input.text())
@@ -266,8 +298,14 @@ class LoanUpdatePage(StyledWidget):
             for row_idx, repayment in enumerate(repayments):
                 self.repayment_table.insertRow(row_idx)
                 
-                payment_date = datetime.strptime(repayment['payment_date'], "%Y-%m-%d")
-                formatted_date = payment_date.strftime("%d-%m-%Y")
+                # Parse the unusual date format
+                payment_date_str = repayment['payment_date']
+                # Extract day, month, year
+                day = payment_date_str.split()[0]  # Get "22" 
+                month_year = payment_date_str.split('-')[-2:]  # Get ["06", "2024"]
+                month = month_year[0]
+                year = month_year[1]
+                formatted_date = f"{day}-{month}-{year}"  # "22-06-2024"
                 
                 self.repayment_table.setItem(row_idx, 0, QTableWidgetItem(formatted_date))
                 self.repayment_table.setItem(row_idx, 1, QTableWidgetItem(repayment.get("asset_description", "")))
@@ -474,10 +512,25 @@ class LoanUpdatePage(StyledWidget):
             
             # Unpack loan data
             (loan_date, asset_descriptions, total_weight, loan_amount, 
-            amount_due, interest_amount, loan_account_number, loan_id, _) = loan_data
+            amount_due, interest_amount, registered_reference_id, loan_id, _) = loan_data
             
-            # Format date
-            formatted_date = datetime.strptime(loan_date, "%Y-%m-%d").strftime("%d-%m-%Y")
+            # Parse the date format "2022-09-21-09-21 00:00:00"
+            loan_date_str = loan_date
+            try:
+                # Split by spaces to separate date and time
+                date_part = loan_date_str.split()[0]
+                # Split the date part by hyphens
+                date_parts = date_part.split('-')
+                # Get year, month, day
+                if len(date_parts) >= 3:
+                    year = date_parts[0]
+                    month = date_parts[1]
+                    day = date_parts[2]
+                    formatted_date = f"{day}-{month}-{year}"  # "21-09-2022"
+                else:
+                    formatted_date = loan_date_str  # Fallback to original if can't parse
+            except Exception:
+                formatted_date = loan_date_str  # Fallback to original if error
             
             # Set table items
             self.loan_table.setItem(row_idx, 0, QTableWidgetItem(formatted_date))

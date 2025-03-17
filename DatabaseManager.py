@@ -24,7 +24,7 @@ class DatabaseManager:
                 CREATE TABLE IF NOT EXISTS Loans (
                     loan_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     customer_id INTEGER NOT NULL,
-                    loan_account_number TEXT UNIQUE NOT NULL,
+                    registered_reference_id TEXT DEFAULT NULL,
                     loan_amount DECIMAL(10, 2) NOT NULL,
                     loan_amount_paid DECIMAL(10, 2) DEFAULT 0.00,
                     loan_status TEXT DEFAULT 'Pending',
@@ -68,7 +68,7 @@ class DatabaseManager:
                     l.loan_amount AS loan_amount,
                     (l.loan_amount - l.loan_amount_paid) AS loan_amount_due,
                     COALESCE(SUM(p.interest_amount), 0) AS total_interest_amount,
-                    l.loan_account_number AS loan_account_number,
+                    l.registered_reference_id AS registered_reference_id,
                     l.loan_id AS loan_id,
                     l.customer_id AS customer_id
                 FROM Loans l
@@ -203,17 +203,17 @@ class DatabaseManager:
         return None
 
     @staticmethod
-    def insert_loan(customer_id, loan_amount, loan_date, loan_account_number):
+    def insert_loan(customer_id, loan_amount, loan_date, registered_reference_id):
         """Insert a new loan and return the loan_id"""
         query = """
         INSERT INTO Loans 
-        (customer_id, loan_amount, created_at, loan_account_number) 
+        (customer_id, loan_amount, created_at, registered_reference_id) 
         VALUES (?, ?, ?, ?)
         """
         conn = DatabaseManager.create_connection()
         try:
             cursor = conn.cursor()
-            cursor.execute(query, (customer_id, loan_amount, loan_date, loan_account_number))
+            cursor.execute(query, (customer_id, loan_amount, loan_date, registered_reference_id))
             conn.commit()
             return cursor.lastrowid
         finally:
@@ -425,7 +425,7 @@ class DatabaseManager:
                 conn.close()
 
     @staticmethod
-    def insert_loan_with_asset(customer_id, loan_amount, loan_date, loan_account_number, description, weight):
+    def insert_loan_with_asset(customer_id, loan_amount, loan_date, registered_reference_id, description, weight):
         conn = None
         try:
             conn = DatabaseManager.create_connection()
@@ -434,9 +434,9 @@ class DatabaseManager:
 
             # Insert Loan
             cursor.execute("""
-                INSERT INTO Loans (customer_id, loan_amount, created_at, loan_account_number)
+                INSERT INTO Loans (customer_id, loan_amount, created_at, registered_reference_id)
                 VALUES (?, ?, ?, ?)
-            """, (customer_id, loan_amount, loan_date, loan_account_number))
+            """, (customer_id, loan_amount, loan_date, registered_reference_id))
             loan_id = cursor.lastrowid
 
             # Insert Asset
@@ -519,20 +519,20 @@ class DatabaseManager:
             return DatabaseManager.execute_query(insert_query, (loan_id, description, weight))
     
     @staticmethod
-    def update_loan(loan_id, loan_date, loan_account_number, loan_amount):
+    def update_loan(loan_id, loan_date, registered_reference_id, loan_amount):
         """Updates loan details."""
         query = """
         UPDATE Loans
-        SET created_at = ?, loan_account_number = ?, loan_amount = ?
+        SET created_at = ?, registered_reference_id = ?, loan_amount = ?
         WHERE loan_id = ?
         """
-        return DatabaseManager.execute_query(query, (loan_date, loan_account_number, loan_amount, loan_id))
+        return DatabaseManager.execute_query(query, (loan_date, registered_reference_id, loan_amount, loan_id))
 
     @staticmethod
     def fetch_loan_details_to_edit(loan_id):
         """Fetches loan details for a given loan ID."""
         query = """
-        SELECT loan_date, loan_account_number, loan_amount
+        SELECT loan_date, registered_reference_id, loan_amount
         FROM LoanView
         WHERE loan_id = ?
         """
@@ -545,7 +545,7 @@ class DatabaseManager:
             if result:
                 return {
                     "loan_date": result[0],
-                    "loan_account_number": result[1],
+                    "registered_reference_id": result[1],
                     "loan_amount_left": result[2]
                 }
         except sqlite3.Error as e:
@@ -559,7 +559,7 @@ class DatabaseManager:
     def fetch_loan_details_to_edit(loan_id):
         """Fetch loan details along with the asset details."""
         query = """
-        SELECT l.loan_account_number, l.loan_amount, a.description, a.weight
+        SELECT l.registered_reference_id, l.loan_amount, a.description, a.weight
         FROM Loans l
         LEFT JOIN Assets a ON l.loan_id = a.loan_id
         WHERE l.loan_id = ?
@@ -567,7 +567,7 @@ class DatabaseManager:
         result = DatabaseManager.fetch_data(query, (loan_id,))
         if result:
             return {
-                "loan_account_number": result[0][0],
+                "registered_reference_id": result[0][0],
                 "loan_amount": result[0][1],
                 "description": result[0][2] if result[0][2] else "",
                 "weight": result[0][3] if result[0][3] else "0.0"
