@@ -8,101 +8,13 @@ from PyQt5.QtWidgets import QDateEdit
 from PyQt5.QtCore import QDate
 from PyQt5.QtWidgets import QDateEdit, QSizePolicy
 
-class AssetEntry(QGroupBox):
-    def __init__(self, parent_widget=None, index=0):
-        super().__init__()
-        self.parent_widget = parent_widget
-        self.index = index
-        self.init_ui()
-        
-    def init_ui(self):
-        self.setTitle(f"Asset {self.index + 1}")
-        self.setMinimumHeight(300)
-        self.setMaximumHeight(300)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-
-        main_layout = QVBoxLayout()
-        input_layout = QVBoxLayout()
-
-        # Style for input fields
-        input_style = """
-            QLineEdit {
-                min-height: 30px;
-                max-height: 30px;
-                padding: 5px;
-            }
-        """
-
-        # Reference ID
-        reference_id_layout = QHBoxLayout()
-        reference_id_label = QLabel("Reference ID:")
-        self.reference_id_input = QLineEdit()
-        self.reference_id_input.setPlaceholderText("Enter Reference ID")
-        self.reference_id_input.setStyleSheet(input_style)
-        reference_id_layout.addWidget(reference_id_label)
-        reference_id_layout.addWidget(self.reference_id_input)
-        input_layout.addLayout(reference_id_layout)
-
-        # Description
-        desc_layout = QHBoxLayout()
-        desc_label = QLabel("Description:")
-        self.description_input = QLineEdit()
-        self.description_input.setPlaceholderText("Enter Asset Description")
-        self.description_input.setStyleSheet(input_style)
-        desc_layout.addWidget(desc_label)
-        desc_layout.addWidget(self.description_input)
-        input_layout.addLayout(desc_layout)
-
-        # Weight
-        weight_layout = QHBoxLayout()
-        weight_label = QLabel("Weight (g):")
-        self.weight_input = QLineEdit()
-        self.weight_input.setPlaceholderText("Enter Asset Weight (g)")
-        self.weight_input.setStyleSheet(input_style)
-        weight_layout.addWidget(weight_label)
-        weight_layout.addWidget(self.weight_input)
-        input_layout.addLayout(weight_layout)
-
-        remove_layout = QHBoxLayout()
-        remove_layout.addStretch()
-        self.remove_btn = QPushButton("Remove Asset")
-        self.remove_btn.setFixedSize(120, 30)
-        self.remove_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #ff4444;
-                color: white;
-                border-radius: 12px;
-                font-weight: bold;
-                font-size: 12px;
-            }
-            QPushButton:hover {
-                background-color: #ff0000;
-            }
-        """)
-        self.remove_btn.clicked.connect(self.remove_asset)
-        remove_layout.addWidget(self.remove_btn)
-        input_layout.addLayout(remove_layout)
-
-        main_layout.addLayout(input_layout)
-        self.setLayout(main_layout)
-
-    def get_data(self):
-        return {
-            'reference_id': self.reference_id_input.text().strip(),
-            'description': self.description_input.text().strip(),
-            'weight': self.weight_input.text().strip()
-        }
-
-    def remove_asset(self):
-        if self.parent_widget:
-            self.parent_widget.remove_asset_entry(self)
-
 class LoanRegistrationPage(StyledWidget):
     def __init__(self, parent, switch_page_callback):
         super().__init__(parent, with_back_button=True, title="Register Loan", switch_page_callback=switch_page_callback)
         self.selected_customer_id = None
         self.customer_info_group = None
         self.asset_entries = []
+        self.edit_loan_group = None  # Add this to track the edit loan group
         self.init_ui()
 
     def init_ui(self):
@@ -162,47 +74,20 @@ class LoanRegistrationPage(StyledWidget):
         
         self.loan_amount_input = QLineEdit()
         self.loan_amount_input.setPlaceholderText("Enter Loan Amount (₹)")
-        self.loan_amount_input.textChanged.connect(self.on_loan_amount_changed)
         loan_form_layout.addRow("Loan Amount (₹):", self.loan_amount_input)
 
-        self.assets_group = QGroupBox("Assets")
-        assets_layout = QVBoxLayout()
-        
-        self.scroll = QScrollArea()
-        self.scroll.setWidgetResizable(True)
-        self.scroll_content = QWidget()
-        self.assets_layout = QVBoxLayout(self.scroll_content)
-        self.scroll.setWidget(self.scroll_content)
-        self.scroll.setMinimumHeight(300)
-        assets_layout.addWidget(self.scroll)
-        
+        # Asset Description
+        self.asset_description_input = QLineEdit()
+        self.asset_description_input.setPlaceholderText("Enter Asset Description")
+        loan_form_layout.addRow("Asset Description:", self.asset_description_input)
+
+        # Asset Weight
+        self.asset_weight_input = QLineEdit()
+        self.asset_weight_input.setPlaceholderText("Enter Asset Weight (g)")
+        loan_form_layout.addRow("Asset Weight (g):", self.asset_weight_input)
+
         bottom_layout = QHBoxLayout()
         bottom_layout.addStretch()
-        
-        self.add_asset_btn = QPushButton("+ Add Asset")
-        self.add_asset_btn.setFixedSize(90, 30)
-        self.add_asset_btn.setEnabled(False)
-        self.add_asset_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border-radius: 15px;
-                font-weight: bold;
-                font-size: 12px;
-            }
-            QPushButton:enabled:hover {
-                background-color: #45a049;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-            }
-        """)
-        self.add_asset_btn.clicked.connect(self.add_asset_entry)
-        bottom_layout.addWidget(self.add_asset_btn)
-        
-        assets_layout.addLayout(bottom_layout)
-        self.assets_group.setLayout(assets_layout)
-        loan_form_layout.addRow(self.assets_group)
         
         self.register_loan_btn = QPushButton("Register Loan")
         self.register_loan_btn.clicked.connect(self.register_loan)
@@ -218,21 +103,24 @@ class LoanRegistrationPage(StyledWidget):
         loans_layout = QVBoxLayout()
         
         self.loans_table = QTableWidget()
-        self.loans_table.setColumnCount(7)
+        self.loans_table.setColumnCount(10)  # Increased to 10 for Loan Account Number and Delete Loan columns
         self.loans_table.setHorizontalHeaderLabels([
             "Loan Date", 
+            "Loan Account Number",  # New column
             "Assets",
             "Total Weight (g)", 
             "Loan Amount (₹)", 
             "Amount Due (₹)",
             "Interest Paid (₹)",
-            "Status"
+            "Status", 
+            "Edit Loan",
+            "Delete Loan"  # New column
         ])
         
         self.loans_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.loans_table.setSelectionMode(QTableWidget.SingleSelection)
         self.loans_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.loans_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.loans_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)  # Assets column
         self.loans_table.setAlternatingRowColors(True)
         self.loans_table.setStyleSheet("""
             QTableWidget {
@@ -250,37 +138,36 @@ class LoanRegistrationPage(StyledWidget):
         self.loans_group.setLayout(loans_layout)
         self.content_layout.addWidget(self.loans_group)
 
+        # Container for edit section that can be shown/hidden
+        self.edit_section_wrapper = QWidget()
+        self.edit_section_layout = QVBoxLayout()
+        self.edit_section_wrapper.setLayout(self.edit_section_layout)
+        self.content_layout.addWidget(self.edit_section_wrapper)
+        
+        # Initially hide the edit section
+        self.edit_section_wrapper.setVisible(False)
+
         self.content_layout.addStretch(1)
 
     def register_loan(self):
         try:
-            loan_amount = float(self.loan_amount_input.text())
+            loan_amount = float(self.loan_amount_input.text().strip())
             if loan_amount <= 0:
                 raise ValueError("Loan amount must be positive.")
-
-            if not self.asset_entries:
-                raise ValueError("Please add at least one asset.")
 
             loan_account_number = self.loan_account_input.text().strip()
             if not loan_account_number:
                 raise ValueError("Loan account number cannot be empty.")
 
+            asset_description = self.asset_description_input.text().strip()
+            if not asset_description:
+                raise ValueError("Asset description cannot be empty.")
+
+            asset_weight = float(self.asset_weight_input.text().strip())
+            if asset_weight <= 0:
+                raise ValueError("Asset weight must be positive.")
+
             loan_date = self.date_input.date().toString("yyyy-MM-dd")
-            assets_data = []
-            for asset_entry in self.asset_entries:
-                data = asset_entry.get_data()
-                if not data['reference_id']:
-                    raise ValueError(f"Asset {asset_entry.index + 1}: Reference ID cannot be empty.")
-                if not data['description']:
-                    raise ValueError(f"Asset {asset_entry.index + 1}: Description cannot be empty.")
-                try:
-                    weight = float(data['weight'])
-                    if weight <= 0:
-                        raise ValueError(f"Asset {asset_entry.index + 1}: Weight must be positive.")
-                    data['weight'] = weight
-                    assets_data.append(data)
-                except ValueError:
-                    raise ValueError(f"Asset {asset_entry.index + 1}: Invalid weight value.")
 
         except ValueError as e:
             QMessageBox.warning(self, "Input Error", str(e))
@@ -290,12 +177,9 @@ class LoanRegistrationPage(StyledWidget):
             QMessageBox.warning(self, "Selection Error", "Please select a customer.")
             return
         
-        success, message = DatabaseManager.insert_loan_with_assets(
-            self.selected_customer_id,
-            loan_amount,
-            loan_date,
-            loan_account_number,
-            assets_data
+        success, message = DatabaseManager.insert_loan_with_asset(
+            self.selected_customer_id, loan_amount, loan_date, loan_account_number, 
+            asset_description, asset_weight
         )
 
         if success:
@@ -303,20 +187,7 @@ class LoanRegistrationPage(StyledWidget):
             self.reset_form()
             self.update_loans_table()
         else:
-            QMessageBox.critical(self, "Error", f"Failed to register loan: {str(e)}")
-
-    def on_loan_amount_changed(self, text):
-        try:
-            amount = float(text)
-            self.add_asset_btn.setEnabled(amount > 0)
-        except ValueError:
-            self.add_asset_btn.setEnabled(False)
-
-    def add_asset_entry(self):
-        asset_entry = AssetEntry(parent_widget=self, index=len(self.asset_entries))
-        asset_entry.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.asset_entries.append(asset_entry)
-        self.assets_layout.insertWidget(len(self.asset_entries) - 1, asset_entry)
+            QMessageBox.critical(self, "Error", f"Failed to register loan: {message}")
 
     def remove_asset_entry(self, entry):
         self.assets_layout.removeWidget(entry)
@@ -329,6 +200,8 @@ class LoanRegistrationPage(StyledWidget):
     def reset_form(self):
         self.loan_amount_input.clear()
         self.loan_account_input.clear()
+        self.asset_description_input.clear()
+        self.asset_weight_input.clear()
         for entry in self.asset_entries[:]:
             self.remove_asset_entry(entry)
 
@@ -346,17 +219,30 @@ class LoanRegistrationPage(StyledWidget):
                 self.customer_dropdown.addItem(f"{name}", customer_id)
 
     def on_customer_selected(self, index):
-        if index <= 0:  # Account for the "Select Customer" option
+        # Clean up existing edit section if it exists
+        self.remove_edit_section()
+        
+        if index <= 0:  # If "Select Customer" is chosen
             self.selected_customer_id = None
             self.loan_form_group.setEnabled(False)
             self.update_customer_info()
             self.update_loans_table()
+            self.edit_section_wrapper.setVisible(False)  # Hide edit section
             return
-            
+
         self.selected_customer_id = self.customer_dropdown.currentData()
         self.loan_form_group.setEnabled(True)
         self.update_customer_info()
         self.update_loans_table()
+
+    def remove_edit_section(self):
+        # Remove any widgets in the edit section layout
+        while self.edit_section_layout.count():
+            item = self.edit_section_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+        self.edit_section_wrapper.setVisible(False)
 
     def update_loans_table(self):
         if not self.selected_customer_id:
@@ -365,30 +251,62 @@ class LoanRegistrationPage(StyledWidget):
             
         loans = DatabaseManager.fetch_loans_for_customer(self.selected_customer_id)
         self.loans_table.setRowCount(len(loans))
-        
+
         for row, loan in enumerate(loans):
-            # Convert the date string from yyyy-MM-dd to dd-MM-yyyy
-            try:
-                # Parse the original date string
-                date_parts = loan[0].split('-')
-                if len(date_parts) == 3:
-                    # Rearrange to dd-MM-yyyy format
-                    formatted_date = f"{date_parts[2]}-{date_parts[1]}-{date_parts[0]}"
-                else:
-                    formatted_date = loan[0]  # Keep original if parsing fails
-            except Exception:
-                formatted_date = loan[0]  # Keep original if any error occurs
+            # Convert date format
+            date_parts = loan[0].split('-')
+            formatted_date = f"{date_parts[2]}-{date_parts[1]}-{date_parts[0]}" if len(date_parts) == 3 else loan[0]
             
-            # Update table with formatted date
             self.loans_table.setItem(row, 0, QTableWidgetItem(formatted_date))
-            self.loans_table.setItem(row, 1, QTableWidgetItem(loan[1] or "N/A"))  # Assets
-            self.loans_table.setItem(row, 2, QTableWidgetItem(f"{loan[2]:.2f}"))  # Total Weight
-            self.loans_table.setItem(row, 3, QTableWidgetItem(f"{loan[3]:.2f}"))  # Loan Amount
-            self.loans_table.setItem(row, 4, QTableWidgetItem(f"{loan[4]:.2f}"))  # Amount Due
-            self.loans_table.setItem(row, 5, QTableWidgetItem(f"{loan[5]:.2f}"))  # Interest Paid
+            self.loans_table.setItem(row, 1, QTableWidgetItem(loan[6] or "N/A"))  # Loan Account Number
+            self.loans_table.setItem(row, 2, QTableWidgetItem(loan[1] or "N/A"))  # Assets
+            self.loans_table.setItem(row, 3, QTableWidgetItem(f"{loan[2]:.2f}"))  # Total Weight
+            self.loans_table.setItem(row, 4, QTableWidgetItem(f"{loan[3]:.2f}"))  # Loan Amount
+            self.loans_table.setItem(row, 5, QTableWidgetItem(f"{loan[4]:.2f}"))  # Amount Due
+            self.loans_table.setItem(row, 6, QTableWidgetItem(f"{loan[5]:.2f}"))  # Interest Paid
             
             status = "Completed" if float(loan[4]) <= 0 else "Pending"
-            self.loans_table.setItem(row, 6, QTableWidgetItem(status))
+            self.loans_table.setItem(row, 7, QTableWidgetItem(status))
+
+            # Add "Edit Loan" Button
+            edit_button = QPushButton("Edit Loan")
+            edit_button.setFixedSize(90, 30)
+            edit_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #2196F3;
+                    color: white;
+                    border-radius: 8px;
+                    font-weight: bold;
+                    font-size: 11px;
+                    margin-top: 5px;
+                    margin-left: 5px;
+                }
+                QPushButton:hover {
+                    background-color: #1976D2;
+                }
+            """)
+            edit_button.clicked.connect(lambda _, loan_id=loan[7]: self.open_edit_loan(loan_id))
+            self.loans_table.setCellWidget(row, 8, edit_button)  # Column 8 for Edit Button
+
+            # Add "Delete Loan" Button
+            delete_button = QPushButton("Delete Loan")
+            delete_button.setFixedSize(90, 30)
+            delete_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #F44336;
+                    color: white;
+                    border-radius: 8px;
+                    font-weight: bold;
+                    font-size: 11px;
+                    margin-top: 5px;
+                    margin-left: 5px;
+                }
+                QPushButton:hover {
+                    background-color: #D32F2F;
+                }
+            """)
+            delete_button.clicked.connect(lambda _, loan_id=loan[7]: self.delete_loan(loan_id))
+            self.loans_table.setCellWidget(row, 9, delete_button)  # Column 9 for Delete Button
 
     def update_customer_info(self):
         # Clear existing widgets
@@ -413,3 +331,155 @@ class LoanRegistrationPage(StyledWidget):
                 layout.addLayout(row)
         else:
             QMessageBox.warning(self, "Error", "Failed to load customer details.")
+
+    def open_edit_loan(self, loan_id):
+        # First, remove any existing edit section
+        self.remove_edit_section()
+        self.edit_section_wrapper.setVisible(True)  # Make edit section visible
+        
+        loan_details = DatabaseManager.fetch_loan_details_to_edit(loan_id)
+
+        if not loan_details:
+            QMessageBox.warning(self, "Error", "Loan details not found.")
+            return
+
+        # Create and add new edit loan group to the edit section layout
+        self.edit_loan_group = QGroupBox("Edit Loan Details")
+        edit_loan_layout = QFormLayout()
+
+        # Add date input
+        self.edit_date_input = QDateEdit()
+        self.edit_date_input.setCalendarPopup(True)
+        
+        # Try to parse the loan date if available
+        try:
+            date_parts = loan_details.get("loan_date", "").split('-')
+            if len(date_parts) == 3:
+                self.edit_date_input.setDate(QDate(int(date_parts[0]), int(date_parts[1]), int(date_parts[2])))
+            else:
+                self.edit_date_input.setDate(QDate.currentDate())
+        except:
+            self.edit_date_input.setDate(QDate.currentDate())
+            
+        edit_loan_layout.addRow("Loan Date:", self.edit_date_input)
+
+        self.edit_loan_account_input = QLineEdit()
+        self.edit_loan_account_input.setText(loan_details["loan_account_number"])
+        edit_loan_layout.addRow("Loan Account Number:", self.edit_loan_account_input)
+
+        self.edit_loan_amount_input = QLineEdit()
+        self.edit_loan_amount_input.setText(str(loan_details["loan_amount"]))
+        edit_loan_layout.addRow("Loan Amount (₹):", self.edit_loan_amount_input)
+
+        self.edit_asset_description_input = QLineEdit()
+        self.edit_asset_description_input.setText(loan_details["description"])
+        edit_loan_layout.addRow("Asset Description:", self.edit_asset_description_input)
+
+        self.edit_asset_weight_input = QLineEdit()
+        self.edit_asset_weight_input.setText(str(loan_details["weight"]))
+        edit_loan_layout.addRow("Asset Weight (g):", self.edit_asset_weight_input)
+
+        # Save button
+        save_button = QPushButton("Update Loan Details")
+        save_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border-radius: 8px;
+                font-weight: bold;
+                min-height: 30px;
+                padding: 5px 10px;
+            }
+            QPushButton:hover {
+                background-color: #388E3C;
+            }
+        """)
+        save_button.clicked.connect(lambda: self.save_edited_loan(loan_id))
+        
+        # Cancel button
+        cancel_button = QPushButton("Cancel")
+        cancel_button.setStyleSheet("""
+            QPushButton {
+                background-color: #9E9E9E;
+                color: white;
+                border-radius: 8px;
+                font-weight: bold;
+                min-height: 30px;
+                padding: 5px 10px;
+            }
+            QPushButton:hover {
+                background-color: #757575;
+            }
+        """)
+        cancel_button.clicked.connect(self.remove_edit_section)
+        
+        # Button layout
+        button_layout = QHBoxLayout()
+        button_layout.addWidget(save_button)
+        button_layout.addWidget(cancel_button)
+        
+        edit_loan_layout.addRow("", button_layout)
+        
+        self.edit_loan_group.setLayout(edit_loan_layout)
+        self.edit_section_layout.addWidget(self.edit_loan_group)
+
+    def save_edited_loan(self, loan_id):
+        try:
+            loan_date = self.edit_date_input.date().toString("yyyy-MM-dd")
+            loan_account_number = self.edit_loan_account_input.text().strip()
+            loan_amount = self.edit_loan_amount_input.text().strip()
+            asset_description = self.edit_asset_description_input.text().strip()
+            asset_weight = self.edit_asset_weight_input.text().strip()
+
+            # Validate inputs
+            if not loan_account_number:
+                raise ValueError("Loan account number cannot be empty.")
+                
+            if not asset_description:
+                raise ValueError("Asset description cannot be empty.")
+
+            # Validate numeric inputs
+            loan_amount = float(loan_amount)
+            if loan_amount <= 0:
+                raise ValueError("Loan amount must be positive.")
+                
+            asset_weight = float(asset_weight)
+            if asset_weight <= 0:
+                raise ValueError("Asset weight must be positive.")
+
+        except ValueError as e:
+            QMessageBox.warning(self, "Input Error", str(e))
+            return
+
+        # Update Loan and Asset details
+        try:
+            # Update the loan record
+            DatabaseManager.update_loan(loan_id, loan_date, loan_account_number, loan_amount)
+            
+            # Update the asset record
+            DatabaseManager.update_loan_assets(loan_id, asset_description, asset_weight)
+            
+            QMessageBox.information(self, "Success", "Loan details updated successfully!")
+            self.remove_edit_section()  # Hide the edit section
+            self.update_loans_table()   # Refresh the table
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to update loan: {str(e)}")
+
+    def delete_loan(self, loan_id):
+        # Confirm with user before deleting
+        reply = QMessageBox.question(
+            self, 
+            "Confirm Deletion", 
+            "Are you sure you want to delete this loan?\nThis action cannot be undone.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            try:
+                DatabaseManager.delete_loan(loan_id)
+                QMessageBox.information(self, "Success", "Loan deleted successfully!")
+                self.update_loans_table()
+                self.remove_edit_section()  # Remove edit section if it's showing the deleted loan
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to delete loan: {str(e)}")

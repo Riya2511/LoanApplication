@@ -16,7 +16,7 @@ class HomePage(StyledWidget):
 
         options = [
             ("Register Customer", 2),
-            ("Register Loan", 3),
+            ("Register / Edit Loan", 3),
             ("Repay Loan", 4),
             ("Generate Report", 5)
         ]

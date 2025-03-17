@@ -37,13 +37,12 @@ class DatabaseManager:
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS Assets (
                     asset_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    loan_id INTEGER NOT NULL,
-                    reference_id TEXT UNIQUE,
+                    loan_id INTEGER NOT NULL UNIQUE,
                     description TEXT NOT NULL,
                     weight DECIMAL(10, 2) NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (loan_id) REFERENCES Loans(loan_id)
+                    FOREIGN KEY (loan_id) REFERENCES Loans(loan_id) ON DELETE CASCADE
                 );
             ''')
 
@@ -221,21 +220,13 @@ class DatabaseManager:
             conn.close()
 
     @staticmethod
-    def insert_asset(loan_id, reference_id, description, weight):
-        """Insert a new asset associated with a loan"""
+    def insert_asset(loan_id, description, weight):
+        """Insert a new asset associated with a loan (one-to-one relationship)."""
         query = """
-        INSERT INTO Assets 
-        (loan_id, reference_id, description, weight) 
-        VALUES (?, ?, ?, ?)
+        INSERT INTO Assets (loan_id, description, weight) 
+        VALUES (?, ?, ?)
         """
-        conn = DatabaseManager.create_connection()
-        try:
-            cursor = conn.cursor()
-            cursor.execute(query, (loan_id, reference_id, description, weight))
-            conn.commit()
-            return cursor.lastrowid
-        finally:
-            conn.close()
+        return DatabaseManager.execute_query(query, (loan_id, description, weight))
 
     @staticmethod
     def insert_loan_payment(loan_id, payment_amount, interest_amount, amount_left, asset_description, payment_date):
@@ -357,7 +348,7 @@ class DatabaseManager:
     def fetch_loan_assets(loan_id):
         """Fetch assets attached to a given loan."""
         query = """
-        SELECT reference_id, description, weight
+        SELECT description, weight
         FROM Assets
         WHERE loan_id = ?
         """
@@ -367,14 +358,14 @@ class DatabaseManager:
     def fetch_loan_payments(loan_id):
         """Fetch all payments made for a given loan."""
         query = """
-        SELECT payment_date, payment_amount, amount_left, interest_amount, asset_description
+        SELECT payment_id, payment_date, payment_amount, amount_left, interest_amount, asset_description
         FROM LoanPayments
         WHERE loan_id = ?
         ORDER BY payment_date ASC
         """
         results = DatabaseManager.fetch_data(query, (loan_id,))
         return [
-            {"payment_date": result[0], "payment_amount": result[1], "amount_left": result[2], "interest_amount": result[3], "asset_description": result[4]}
+            {"payment_id": result[0], "payment_date": result[1], "payment_amount": result[2], "amount_left": result[3], "interest_amount": result[4], "asset_description": result[5]}
             for result in results
         ]
 
@@ -434,56 +425,38 @@ class DatabaseManager:
                 conn.close()
 
     @staticmethod
-    def insert_loan_with_assets(customer_id, loan_amount, loan_date, loan_account_number, assets_data):
+    def insert_loan_with_asset(customer_id, loan_amount, loan_date, loan_account_number, description, weight):
         conn = None
         try:
             conn = DatabaseManager.create_connection()
             conn.execute("BEGIN TRANSACTION")
             cursor = conn.cursor()
-            
-            # Insert loan
+
+            # Insert Loan
             cursor.execute("""
-                INSERT INTO Loans 
-                (customer_id, loan_amount, created_at, loan_account_number) 
+                INSERT INTO Loans (customer_id, loan_amount, created_at, loan_account_number)
                 VALUES (?, ?, ?, ?)
             """, (customer_id, loan_amount, loan_date, loan_account_number))
-            
             loan_id = cursor.lastrowid
-            
-            # Insert assets
-            for asset in assets_data:
-                cursor.execute("""
-                    INSERT INTO Assets 
-                    (loan_id, reference_id, description, weight) 
-                    VALUES (?, ?, ?, ?)
-                """, (loan_id, asset['reference_id'], asset['description'], asset['weight']))
-            
+
+            # Insert Asset
+            cursor.execute("""
+                INSERT INTO Assets (loan_id, description, weight)
+                VALUES (?, ?, ?)
+            """, (loan_id, description, weight))
+
             conn.commit()
             return True, "Loan registered successfully"
-            
-        except sqlite3.IntegrityError as e:
-            if conn:
-                conn.rollback()
-            if "loan_account_number" in str(e):
-                return False, "Loan account number already exists"
-            elif "reference_id" in str(e):
-                return False, "Asset reference ID already exists"
-            return False, f"Data integrity error: {str(e)}"
-            
+        
         except sqlite3.Error as e:
             if conn:
                 conn.rollback()
             return False, f"Database error: {str(e)}"
-            
-        except Exception as e:
-            if conn:
-                conn.rollback()
-            return False, f"Unexpected error: {str(e)}"
-            
+        
         finally:
             if conn:
                 conn.close()
-    
+
     @staticmethod
     def get_summary_stats():
         """Fetch total customers and total loan amount due."""
@@ -504,6 +477,304 @@ class DatabaseManager:
         except sqlite3.Error as e:
             print(f"Database error while fetching summary stats: {e}")
             return 0, 0
+        finally:
+            if conn:
+                conn.close()
+
+    @staticmethod
+    def update_customer(customer_id, name, phone, address):
+        """Update an existing customer's details."""
+        query = """
+        UPDATE Customers 
+        SET name = ?, phone = ?, address = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE customer_id = ?
+        """
+        try:
+            cursor = DatabaseManager.execute_query(query, (name, phone, address, customer_id))
+            return cursor.rowcount > 0  # Return True if any row was updated
+        except sqlite3.IntegrityError:
+            return False  # Handle unique phone constraint
+
+    @staticmethod
+    def update_loan_assets(loan_id, description, weight):
+        """Updates the asset details for a given loan."""
+        # First check if an asset record exists for this loan
+        check_query = "SELECT COUNT(*) FROM Assets WHERE loan_id = ?"
+        result = DatabaseManager.fetch_data(check_query, (loan_id,))
+        
+        if result and result[0][0] > 0:
+            # Update existing record
+            update_query = """
+            UPDATE Assets
+            SET description = ?, weight = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE loan_id = ?
+            """
+            return DatabaseManager.execute_query(update_query, (description, weight, loan_id))
+        else:
+            # Insert new record
+            insert_query = """
+            INSERT INTO Assets (loan_id, description, weight)
+            VALUES (?, ?, ?)
+            """
+            return DatabaseManager.execute_query(insert_query, (loan_id, description, weight))
+    
+    @staticmethod
+    def update_loan(loan_id, loan_date, loan_account_number, loan_amount):
+        """Updates loan details."""
+        query = """
+        UPDATE Loans
+        SET created_at = ?, loan_account_number = ?, loan_amount = ?
+        WHERE loan_id = ?
+        """
+        return DatabaseManager.execute_query(query, (loan_date, loan_account_number, loan_amount, loan_id))
+
+    @staticmethod
+    def fetch_loan_details_to_edit(loan_id):
+        """Fetches loan details for a given loan ID."""
+        query = """
+        SELECT loan_date, loan_account_number, loan_amount
+        FROM LoanView
+        WHERE loan_id = ?
+        """
+        try: 
+            conn = DatabaseManager.create_connection()
+            cursor = conn.cursor()
+
+            cursor.execute(query, (loan_id, ))
+            result = cursor.fetchone()[0]
+            if result:
+                return {
+                    "loan_date": result[0],
+                    "loan_account_number": result[1],
+                    "loan_amount_left": result[2]
+                }
+        except sqlite3.Error as e:
+            print(f"Database error while fetching load details to edit: {e}")
+            return None
+        finally:
+            if conn:
+                conn.close()
+    
+    @staticmethod
+    def fetch_loan_details_to_edit(loan_id):
+        """Fetch loan details along with the asset details."""
+        query = """
+        SELECT l.loan_account_number, l.loan_amount, a.description, a.weight
+        FROM Loans l
+        LEFT JOIN Assets a ON l.loan_id = a.loan_id
+        WHERE l.loan_id = ?
+        """
+        result = DatabaseManager.fetch_data(query, (loan_id,))
+        if result:
+            return {
+                "loan_account_number": result[0][0],
+                "loan_amount": result[0][1],
+                "description": result[0][2] if result[0][2] else "",
+                "weight": result[0][3] if result[0][3] else "0.0"
+            }
+        return None
+
+    @staticmethod
+    def update_loan_payment_record(payment_id, payment_date, payment_amount, interest_amount, asset_description):
+        """
+        Update an existing loan payment record.
+        
+        Args:
+            payment_id: ID of the payment to update
+            payment_date: New payment date
+            payment_amount: New payment amount
+            interest_amount: New interest amount
+            asset_description: New asset description
+        """
+        query = """
+        UPDATE LoanPayments
+        SET payment_date = ?,
+            payment_amount = ?,
+            interest_amount = ?,
+            asset_description = ?
+        WHERE payment_id = ?
+        """
+        
+        try:
+            conn = DatabaseManager.create_connection()
+            cursor = conn.cursor()
+            cursor.execute(query, (payment_date, payment_amount, interest_amount, 
+                                asset_description, payment_id))
+            conn.commit()
+            return True
+        except sqlite3.Error as e:
+            print(f"Database error while updating payment: {e}")
+            return False
+        finally:
+            if conn:
+                conn.close()
+
+    @staticmethod
+    def update_loan_total_paid(loan_id, total_paid, loan_status):
+        """
+        Update the total amount paid on a loan and its status.
+        
+        Args:
+            loan_id: ID of the loan to update
+            total_paid: New total paid amount
+            loan_status: New loan status ('Pending' or 'Completed')
+        """
+        query = """
+        UPDATE Loans
+        SET loan_amount_paid = ?,
+            loan_status = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE loan_id = ?
+        """
+        
+        try:
+            conn = DatabaseManager.create_connection()
+            cursor = conn.cursor()
+            cursor.execute(query, (total_paid, loan_status, loan_id))
+            conn.commit()
+            return True
+        except sqlite3.Error as e:
+            print(f"Database error while updating loan total: {e}")
+            return False
+        finally:
+            if conn:
+                conn.close()
+
+    @staticmethod
+    def get_summary_stats_to_generate_report(year=None):
+        """
+        Fetch total customers and total loan amount due, optionally filtered by year.
+        
+        Args:
+            year: Optional year to filter by
+        
+        Returns:
+            tuple: (total_customers, total_loan_due)
+        """
+        try:
+            conn = DatabaseManager.create_connection()
+            cursor = conn.cursor()
+            
+            if year:
+                # Count customers who had loans in the specified year
+                query_customers = """
+                    SELECT COUNT(DISTINCT customer_id) 
+                    FROM Loans 
+                    WHERE strftime('%Y', created_at) = ?
+                """
+                cursor.execute(query_customers, (str(year),))
+                total_customers = cursor.fetchone()[0]
+                
+                # Get total loan amount due for loans created in the specified year
+                query_loan_due = """
+                    SELECT SUM(loan_amount_due) 
+                    FROM LoanView 
+                    WHERE strftime('%Y', loan_date) = ?
+                """
+                cursor.execute(query_loan_due, (str(year),))
+                
+            else:
+                # Get total customers and loan amount due across all years
+                query_customers = "SELECT COUNT(*) FROM Customers"
+                cursor.execute(query_customers)
+                total_customers = cursor.fetchone()[0]
+                
+                query_loan_due = "SELECT SUM(loan_amount_due) FROM LoanView"
+                cursor.execute(query_loan_due)
+            
+            total_loan_due = cursor.fetchone()[0] or 0  # Handle NULL with 0
+            
+            return total_customers, float(total_loan_due)
+        
+        except sqlite3.Error as e:
+            print(f"Database error while fetching summary stats: {e}")
+            return 0, 0.0
+        finally:
+            if conn:
+                conn.close()
+
+    @staticmethod
+    def get_customers_by_year(year=None):
+        """
+        Fetch customers, optionally filtered by those who had loans in a specific year.
+        
+        Args:
+            year: Optional year to filter by
+        
+        Returns:
+            list: List of tuples containing customer_id, name, phone
+        """
+        try:
+            conn = DatabaseManager.create_connection()
+            cursor = conn.cursor()
+            
+            if year:
+                # Get customers who had loans in the specified year
+                query = """
+                    SELECT DISTINCT c.customer_id, c.name, c.phone
+                    FROM Customers c
+                    JOIN Loans l ON c.customer_id = l.customer_id
+                    WHERE strftime('%Y', l.created_at) = ?
+                    ORDER BY c.name
+                """
+                cursor.execute(query, (str(year),))
+            else:
+                # Get all customers
+                query = """
+                    SELECT customer_id, name, phone
+                    FROM Customers
+                    ORDER BY name
+                """
+                cursor.execute(query)
+            
+            return cursor.fetchall()
+        
+        except sqlite3.Error as e:
+            print(f"Database error while fetching customers by year: {e}")
+            return []
+        finally:
+            if conn:
+                conn.close()
+
+    @staticmethod
+    def fetch_loans_for_customer_to_generate_report(customer_id, year=None):
+        """
+        Fetch all loans for a specific customer, optionally filtered by year.
+        
+        Args:
+            customer_id: ID of the customer
+            year: Optional year to filter by
+        
+        Returns:
+            list: List of loan data from LoanView
+        """
+        try:
+            conn = DatabaseManager.create_connection()
+            cursor = conn.cursor()
+            
+            if year:
+                # Get loans for the specified customer in the specified year
+                query = """
+                    SELECT * FROM LoanView 
+                    WHERE customer_id = ? 
+                    AND strftime('%Y', loan_date) = ?
+                    ORDER BY loan_date DESC
+                """
+                cursor.execute(query, (customer_id, str(year)))
+            else:
+                # Get all loans for the specified customer
+                query = """
+                    SELECT * FROM LoanView 
+                    WHERE customer_id = ?
+                    ORDER BY loan_date DESC
+                """
+                cursor.execute(query, (customer_id,))
+            
+            return cursor.fetchall()
+        
+        except sqlite3.Error as e:
+            print(f"Database error while fetching loans for customer {customer_id}: {e}")
+            return []
         finally:
             if conn:
                 conn.close()

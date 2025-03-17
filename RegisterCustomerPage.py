@@ -4,7 +4,7 @@ import sqlite3
 import re
 import csv
 from PyQt5.QtWidgets import (QPushButton, QLineEdit, QFormLayout, QMessageBox, 
-                           QLabel, QFileDialog, QHBoxLayout)
+                           QLabel, QFileDialog, QHBoxLayout, QComboBox, QVBoxLayout, QSizePolicy, QFrame)
 from PyQt5.QtCore import Qt
 
 class RegisterCustomerPage(StyledWidget):
@@ -13,27 +13,64 @@ class RegisterCustomerPage(StyledWidget):
         self.init_ui()
 
     def init_ui(self):
+        layout = QHBoxLayout()  # Main layout for left (register) & right (edit) sections
+        
+        # Left section: Register customer
+        register_layout = self.create_register_section()
+        layout.addLayout(register_layout)
+
+        # Add vertical separator
+        separator = QFrame()
+        separator.setFrameShape(QFrame.VLine)  # Vertical line
+        separator.setFrameShadow(QFrame.Sunken)  # Slight shadow effect
+        separator.setStyleSheet("border: 1px solid #000000; margin: 0 20px;")  # Thin border & spacing
+        layout.addWidget(separator)
+
+        # Right section: Edit customer
+        edit_layout = self.create_edit_section()
+        layout.addLayout(edit_layout)  # Now it correctly adds a QVBoxLayout
+
+        self.content_layout.addLayout(layout)
+        self.content_layout.addStretch(1)
+
+        self.load_customers()
+
+    def create_register_section(self):
+        """Creates the registration section UI"""
+        register_layout = QVBoxLayout()
         form_layout = QFormLayout()
         form_layout.setFieldGrowthPolicy(QFormLayout.FieldsStayAtSizeHint)
         input_width = 300
 
-        # Regular form inputs
+        heading_label = QLabel("Register Customer")
+        heading_label.setAlignment(Qt.AlignLeft)
+        heading_label.setStyleSheet("""
+            background-color: #f0f0f0; 
+            border: 2px solid #cccccc; 
+            border-radius: 8px; 
+            padding: 8px; 
+            font-size: 16px; 
+            font-weight: bold;
+        """)
+        register_layout.addWidget(heading_label, alignment=Qt.AlignLeft)
+
+        # Input fields
         self.name_input = QLineEdit()
-        self.name_input.setFixedWidth(input_width)
         self.phone_input = QLineEdit()
-        self.phone_input.setFixedWidth(input_width)
         self.address_input = QLineEdit()
-        self.address_input.setFixedWidth(input_width)
+
+        for field in [self.name_input, self.phone_input, self.address_input]:
+            field.setFixedWidth(input_width)
 
         # Error labels
         self.name_error = QLabel()
-        self.name_error.setStyleSheet("color: red; font-size: 12px;")
         self.phone_error = QLabel()
-        self.phone_error.setStyleSheet("color: red; font-size: 12px;")
         self.address_error = QLabel()
-        self.address_error.setStyleSheet("color: red; font-size: 12px;")
 
-        # Add fields to the form layout
+        for label in [self.name_error, self.phone_error, self.address_error]:
+            label.setStyleSheet("color: red; font-size: 12px;")
+
+        # Add to layout
         form_layout.addRow("Name:", self.name_input)
         form_layout.addRow("", self.name_error)
         form_layout.addRow("Phone:", self.phone_input)
@@ -41,18 +78,18 @@ class RegisterCustomerPage(StyledWidget):
         form_layout.addRow("Address:", self.address_input)
         form_layout.addRow("", self.address_error)
 
-        self.content_layout.addLayout(form_layout)
+        register_layout.addLayout(form_layout)
 
         # Submit button
         submit_btn = QPushButton("Register Customer")
         submit_btn.setFixedWidth(input_width)
         submit_btn.clicked.connect(self.register_customer)
-        self.content_layout.addWidget(submit_btn)
+        register_layout.addWidget(submit_btn)
 
         # Add separator
         separator = QLabel("─" * 50)
         separator.setStyleSheet("color: #cccccc;")
-        self.content_layout.addWidget(separator)
+        register_layout.addWidget(separator)
 
         # CSV Upload Section
         csv_layout = QHBoxLayout()
@@ -66,10 +103,75 @@ class RegisterCustomerPage(StyledWidget):
         csv_layout.addWidget(self.upload_btn)
         
         csv_layout.addStretch()
-        self.content_layout.addLayout(csv_layout)
+        register_layout.addLayout(csv_layout)
 
-        self.content_layout.addStretch(1)
+        register_layout.addStretch(1)
 
+        return register_layout
+
+    def create_edit_section(self):
+        """Creates the edit section UI"""
+        edit_layout = QVBoxLayout()
+
+        # Dropdown to select a customer
+        self.customer_dropdown = QComboBox()
+        self.customer_dropdown.setFixedWidth(300)
+        self.customer_dropdown.currentIndexChanged.connect(self.load_customer_details)
+
+        heading_label = QLabel("Edit Customer Details")
+        heading_label.setAlignment(Qt.AlignCenter)
+        heading_label.setStyleSheet("""
+            background-color: #f0f0f0; 
+            border: 2px solid #cccccc; 
+            border-radius: 8px; 
+            padding: 8px; 
+            font-size: 16px; 
+            font-weight: bold;
+        """)
+        heading_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        edit_layout.addWidget(heading_label, alignment=Qt.AlignLeft)
+
+        # Increase spacing between heading and dropdown
+        edit_layout.addSpacing(15)  
+
+        edit_layout.addWidget(self.customer_dropdown)
+
+        # Edit form
+        form_layout = QFormLayout()
+        self.edit_name_input = QLineEdit()
+        self.edit_phone_input = QLineEdit()
+        self.edit_address_input = QLineEdit()
+
+        for field in [self.edit_name_input, self.edit_phone_input, self.edit_address_input]:
+            field.setFixedWidth(300)
+
+        # Error labels for the edit section
+        self.edit_name_error = QLabel()
+        self.edit_phone_error = QLabel()
+        self.edit_address_error = QLabel()
+
+        for label in [self.edit_name_error, self.edit_phone_error, self.edit_address_error]:
+            label.setStyleSheet("color: red; font-size: 12px;")
+
+        form_layout.addRow("Name:", self.edit_name_input)
+        form_layout.addRow("", self.edit_name_error)
+        form_layout.addRow("Phone:", self.edit_phone_input)
+        form_layout.addRow("", self.edit_phone_error)
+        form_layout.addRow("Address:", self.edit_address_input)
+        form_layout.addRow("", self.edit_address_error)
+
+        edit_layout.addLayout(form_layout)
+
+        # Increase vertical spacing
+        edit_layout.addSpacing(20)  
+
+        # Save button
+        self.save_btn = QPushButton("Save Changes")
+        self.save_btn.setFixedWidth(300)
+        self.save_btn.clicked.connect(self.save_customer_changes)
+        edit_layout.addWidget(self.save_btn)
+
+        return edit_layout
 
     def validate_csv_row(self, row, row_number):
         """Validate a single row from CSV"""
@@ -173,62 +275,68 @@ class RegisterCustomerPage(StyledWidget):
                 QMessageBox.warning(self, "Import Results", result_message)
             else:
                 QMessageBox.information(self, "Success", result_message)
+                self.load_customers() 
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error processing CSV file:\n{str(e)}")
 
-    def validate_input(self):
-        """Validate input fields"""
-        self.name_error.clear()
-        self.phone_error.clear()
-        self.address_error.clear()
+    def validate_input(self, name, phone, address, is_edit=False):
+        """Validates input fields separately for Register & Edit sections."""
+        if is_edit:
+            self.edit_name_error.clear()
+            self.edit_phone_error.clear()
+            self.edit_address_error.clear()
+        else:
+            self.name_error.clear()
+            self.phone_error.clear()
+            self.address_error.clear()
 
         is_valid = True
 
         # Name validation
-        name = self.name_input.text().strip()
-        if not name:
-            self.name_error.setText("Name is required")
-            is_valid = False
-        elif len(name) < 2:
-            self.name_error.setText("Name must be at least 2 characters")
-            is_valid = False
-
-        # Phone validation
-        phone = self.phone_input.text().strip()
-        phone_regex = r'^\d{10}$'
-        if not phone:
-            self.phone_error.setText("Phone is required")
-            is_valid = False
-        elif not re.match(phone_regex, phone):
-            self.phone_error.setText("Invalid phone number")
+        if not name or len(name) < 2:
+            error_msg = "Name must be at least 2 characters"
+            if is_edit:
+                self.edit_name_error.setText(error_msg)
+            else:
+                self.name_error.setText(error_msg)
             is_valid = False
 
-        # Address validation
-        address = self.address_input.text().strip()
-        if address:
-            # self.address_error.setText("Address is required")
-            # is_valid = False
-            if len(address) < 5:
-                self.address_error.setText("Address is too short")
-                is_valid = False
+        # Phone validation: Must be 10 digits and not start with 0
+        phone_regex = r'^[1-9]\d{9}$'  # Ensures first digit is 1-9 and total length is 10
+        if not re.match(phone_regex, phone):
+            error_msg = "Phone number must be 10 digits and cannot start with 0"
+            if is_edit:
+                self.edit_phone_error.setText(error_msg)
+            else:
+                self.phone_error.setText(error_msg)
+            is_valid = False
+
+        # Address validation (optional)
+        if address and len(address) < 5:
+            error_msg = "Address must be at least 5 characters"
+            if is_edit:
+                self.edit_address_error.setText(error_msg)
+            else:
+                self.address_error.setText(error_msg)
+            is_valid = False
 
         return is_valid
 
     def register_customer(self):
-        """Register customer in the database"""
-        if not self.validate_input():
-            return
-
+        """Registers a new customer"""
         name = self.name_input.text().strip()
         phone = self.phone_input.text().strip()
         address = self.address_input.text().strip()
+
+        if not self.validate_input(name, phone, address):
+            return
 
         query = """
         INSERT INTO Customers (name, phone, address) 
         VALUES (?, ?, ?)
         """
-        
+
         try:
             cursor = DatabaseManager.execute_query(query, (name, phone, address))
             if cursor:
@@ -236,8 +344,47 @@ class RegisterCustomerPage(StyledWidget):
                 self.name_input.clear()
                 self.phone_input.clear()
                 self.address_input.clear()
+                self.load_customers()  # Refresh dropdown
             else:
-                QMessageBox.warning(self, "Error", "Failed to register customer. Please try again.")
-        
+                QMessageBox.warning(self, "Error", "Failed to register customer.")
         except sqlite3.IntegrityError:
-            QMessageBox.warning(self, "Error", "A customer with this Account Number or Phone already exists.")
+            QMessageBox.warning(self, "Error", "Phone number already exists.")
+
+    def load_customers(self):
+        """Loads customer names into dropdown"""
+        self.customer_dropdown.clear()
+        customers = DatabaseManager.get_all_customers()
+        for customer in customers:
+            self.customer_dropdown.addItem(f"{customer[1]}", customer[0])
+
+    def load_customer_details(self):
+        """Loads customer details into the edit form"""
+        customer_id = self.customer_dropdown.currentData()
+        if not customer_id:
+            return
+
+        customer = DatabaseManager.get_customer_by_id(customer_id)
+        if customer:
+            self.edit_name_input.setText(customer["name"])
+            self.edit_phone_input.setText(customer["phone"] if customer["phone"] else "")
+            self.edit_address_input.setText(customer["address"] if customer["address"] else "")
+
+    def save_customer_changes(self):
+        """Updates customer details"""
+        customer_id = self.customer_dropdown.currentData()
+        if not customer_id:
+            QMessageBox.warning(self, "Error", "Please select a customer to edit.")
+            return
+
+        name = self.edit_name_input.text().strip()
+        phone = self.edit_phone_input.text().strip()
+        address = self.edit_address_input.text().strip()
+
+        if not self.validate_input(name, phone, address, is_edit=True):
+            return
+
+        if DatabaseManager.update_customer(customer_id, name, phone, address):
+            QMessageBox.information(self, "Success", "Customer details updated successfully!")
+            self.load_customers()  # Refresh dropdown
+        else:
+            QMessageBox.warning(self, "Error", "Failed to update customer. Phone might already exist.")

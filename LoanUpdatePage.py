@@ -2,12 +2,64 @@ from PyQt5.QtCore import QEvent, Qt
 from PyQt5.QtWidgets import (
     QPushButton, QLineEdit, QFormLayout, QMessageBox, QLabel,
     QHBoxLayout, QComboBox, QGroupBox, QVBoxLayout, QTableWidget,
-    QTableWidgetItem, QDateEdit
+    QTableWidgetItem, QDateEdit, QDialog, QDialogButtonBox
 )
 from PyQt5.QtCore import QDate
 from helper import StyledWidget
 from DatabaseManager import DatabaseManager
 from datetime import datetime
+
+class PaymentEditDialog(QDialog):
+    def __init__(self, parent, payment_id, payment_data):
+        super().__init__(parent)
+        self.payment_id = payment_id
+        self.payment_data = payment_data
+        self.setWindowTitle("Edit Payment")
+        self.setMinimumWidth(400)
+        self.init_ui()
+        
+    def init_ui(self):
+        layout = QVBoxLayout()
+        
+        form_layout = QFormLayout()
+        
+        # Date field
+        self.date_edit = QDateEdit()
+        self.date_edit.setDisplayFormat("dd-MM-yyyy")
+        self.date_edit.setCalendarPopup(True)
+        payment_date = datetime.strptime(self.payment_data['payment_date'], "%Y-%m-%d")
+        self.date_edit.setDate(QDate(payment_date.year, payment_date.month, payment_date.day))
+        form_layout.addRow("Payment Date:", self.date_edit)
+        
+        # Asset description
+        self.asset_input = QLineEdit(self.payment_data.get('asset_description', ''))
+        form_layout.addRow("Asset Description:", self.asset_input)
+        
+        # Payment amount
+        self.amount_input = QLineEdit(str(self.payment_data['payment_amount']))
+        form_layout.addRow("Payment Amount (₹):", self.amount_input)
+        
+        # Interest amount
+        self.interest_input = QLineEdit(str(self.payment_data['interest_amount']))
+        form_layout.addRow("Interest Amount (₹):", self.interest_input)
+        
+        layout.addLayout(form_layout)
+        
+        # Buttons
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+        
+        self.setLayout(layout)
+
+    def get_updated_data(self):
+        return {
+            'payment_date': self.date_edit.date().toPyDate().strftime("%Y-%m-%d"),
+            'asset_description': self.asset_input.text(),
+            'payment_amount': float(self.amount_input.text()),
+            'interest_amount': float(self.interest_input.text())
+        }
 
 class LoanUpdatePage(StyledWidget):
     def __init__(self, parent, switch_page_callback):
@@ -71,26 +123,32 @@ class LoanUpdatePage(StyledWidget):
 
         # Assets Table
         self.assets_table = QTableWidget()
-        self.assets_table.setColumnCount(7)  # Reduced from 8 to 7 columns
+        self.assets_table.setColumnCount(6)  # Reduced from 7 to 6 (removed reference_id)
         self.assets_table.setHorizontalHeaderLabels([
-            "Asset Description", "Reference Id", "Weight (g)", 
+            "Asset Description", "Weight (g)", 
             "Amount Paid (₹)", "Interest (₹)", "Payment Date", ""
         ])
         self.assets_table.setColumnWidth(0, 250)  # Asset Description column
-        self.assets_table.setColumnWidth(5, 120)  # Date column
+        self.assets_table.setColumnWidth(4, 120)  # Date column
         update_layout.addWidget(self.assets_table)
 
         # Repayment History
+        repayment_layout = QVBoxLayout()
+        repayment_header_layout = QHBoxLayout()
         repayment_label = QLabel("Repayment History:")
-        update_layout.addWidget(repayment_label)
+        repayment_header_layout.addWidget(repayment_label)
+        repayment_header_layout.addStretch()
+        repayment_layout.addLayout(repayment_header_layout)
         
         self.repayment_table = QTableWidget()
-        self.repayment_table.setColumnCount(5)
+        self.repayment_table.setColumnCount(6)  # Added one column for edit button
         self.repayment_table.setHorizontalHeaderLabels(
-            ["Payment Date", "Asset", "Amount Paid (₹)", "Interest Paid (₹)", "Remaining (₹)"]
+            ["Payment Date", "Asset", "Amount Paid (₹)", "Interest Paid (₹)", "Remaining (₹)", ""]
         )
         self.repayment_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        update_layout.addWidget(self.repayment_table)
+        repayment_layout.addWidget(self.repayment_table)
+        
+        update_layout.addLayout(repayment_layout)
 
         button_layout = QHBoxLayout()
         self.delete_button = QPushButton("Delete Loan")
@@ -140,27 +198,26 @@ class LoanUpdatePage(StyledWidget):
     def populate_assets_table(self, loan_id):
         """Populate assets table with input fields for payments."""
         assets = DatabaseManager.fetch_loan_assets(loan_id)
-        repaid_assets = DatabaseManager.get_repaid_assets(loan_id)
-        unrepaid_assets = [(desc, ref_id, weight) for desc, ref_id, weight in assets 
-                          if desc not in repaid_assets]
+        # repaid_assets = DatabaseManager.get_repaid_assets(loan_id)
+        # unrepaid_assets = [(desc, weight) for desc, weight in assets 
+        #                   if desc not in repaid_assets]
         
-        self.assets_table.setRowCount(len(unrepaid_assets))
+        self.assets_table.setRowCount(len(assets))
         
-        for row_idx, (description, reference_id, weight) in enumerate(unrepaid_assets):
+        for row_idx, (description, weight) in enumerate(assets):
             # Asset description
             self.assets_table.setItem(row_idx, 0, QTableWidgetItem(description))
-            self.assets_table.setItem(row_idx, 1, QTableWidgetItem(reference_id))
-            self.assets_table.setItem(row_idx, 2, QTableWidgetItem(f"{weight:,.2f}"))
+            self.assets_table.setItem(row_idx, 1, QTableWidgetItem(f"{weight:,.2f}"))
             
             # Amount paid input
             amount_input = QLineEdit()
             amount_input.setPlaceholderText("Enter amount")
-            self.assets_table.setCellWidget(row_idx, 3, amount_input)
+            self.assets_table.setCellWidget(row_idx, 2, amount_input)
             
             # Interest input
             interest_input = QLineEdit()
             interest_input.setPlaceholderText("Enter interest")
-            self.assets_table.setCellWidget(row_idx, 4, interest_input)
+            self.assets_table.setCellWidget(row_idx, 3, interest_input)
 
             # Date input
             date_input = QDateEdit()
@@ -169,7 +226,7 @@ class LoanUpdatePage(StyledWidget):
             date_input.setDate(QDate.currentDate())
             date_input.setMinimumDate(QDate(2000, 1, 1))
             date_input.setMaximumDate(QDate.currentDate())
-            self.assets_table.setCellWidget(row_idx, 5, date_input)
+            self.assets_table.setCellWidget(row_idx, 4, date_input)
             
             # Repay button
             repay_button = QPushButton("Repay")
@@ -190,7 +247,7 @@ class LoanUpdatePage(StyledWidget):
                     background-color: #cccccc;
                 }
             """)
-            self.assets_table.setCellWidget(row_idx, 6, repay_button)
+            self.assets_table.setCellWidget(row_idx, 5, repay_button)
             
             # Connect input validation
             amount_input.textChanged.connect(
@@ -217,17 +274,76 @@ class LoanUpdatePage(StyledWidget):
                 self.repayment_table.setItem(row_idx, 2, QTableWidgetItem(f"{float(repayment['payment_amount']):,.2f}"))
                 self.repayment_table.setItem(row_idx, 3, QTableWidgetItem(f"{float(repayment['interest_amount']):,.2f}"))
                 self.repayment_table.setItem(row_idx, 4, QTableWidgetItem(f"{float(repayment['amount_left']):,.2f}"))
+                
+                # Add edit button
+                edit_button = QPushButton("Edit")
+                edit_button.clicked.connect(lambda checked, pid=repayment.get('payment_id', row_idx), 
+                                         pdata=repayment: self.edit_payment(pid, pdata))
+                edit_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #4CAF50;
+                        color: white;
+                        border-radius: 10px;
+                        font-weight: bold;
+                        font-size: 10px;
+                        padding: 2px 5px;
+                    }
+                    QPushButton:hover {
+                        background-color: #45a049;
+                    }
+                """)
+                self.repayment_table.setCellWidget(row_idx, 5, edit_button)
         else:
             self.repayment_table.setRowCount(1)
             self.repayment_table.setItem(0, 0, QTableWidgetItem("No repayments made"))
-            for i in range(1, 5):
+            for i in range(1, 6):  # Adjusted for extra column
                 self.repayment_table.setItem(0, i, QTableWidgetItem("-"))
+
+    def edit_payment(self, payment_id, payment_data):
+        """Open dialog to edit a payment."""
+        dialog = PaymentEditDialog(self, payment_id, payment_data)
+        if dialog.exec_() == QDialog.Accepted:
+            updated_data = dialog.get_updated_data()
+            try:
+                # Update the payment in the database
+                self.update_payment(payment_id, updated_data)
+                
+                # Refresh the tables
+                self.populate_repayment_table(self.current_loan_id)
+                self.populate_loans_table()
+                
+                QMessageBox.information(self, "Success", "Payment updated successfully!")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to update payment: {str(e)}")
+    
+    def update_payment(self, payment_id, updated_data):
+        """Update a payment in the database."""
+        # Call the database method to update the payment
+        # Note: You'll need to add this method to DatabaseManager
+        DatabaseManager.update_loan_payment_record(
+            payment_id, 
+            updated_data['payment_date'],
+            updated_data['payment_amount'],
+            updated_data['interest_amount'],
+            updated_data['asset_description']
+        )
+        
+        # Also update the total paid amount on the loan
+        current_payments = DatabaseManager.fetch_loan_payments(self.current_loan_id)
+        total_paid = sum(float(payment['payment_amount']) for payment in current_payments)
+        
+        # Update loan status based on total paid
+        loan_amount = DatabaseManager.get_loan_amount(self.current_loan_id)
+        loan_status = "Completed" if total_paid >= loan_amount else "Pending"
+        
+        # Update the loan record with new paid amount and status
+        DatabaseManager.update_loan_total_paid(self.current_loan_id, total_paid, loan_status)
 
     def validate_inputs(self, row):
         """Validate payment inputs and enable/disable repay button."""
-        amount_input = self.assets_table.cellWidget(row, 3)  # Updated index
-        interest_input = self.assets_table.cellWidget(row, 4)  # Updated index
-        repay_button = self.assets_table.cellWidget(row, 6)  # Updated index
+        amount_input = self.assets_table.cellWidget(row, 2)  # Updated index
+        interest_input = self.assets_table.cellWidget(row, 3)  # Updated index
+        repay_button = self.assets_table.cellWidget(row, 5)  # Updated index
         
         try:
             amount = float(amount_input.text() or 0)
@@ -239,9 +355,9 @@ class LoanUpdatePage(StyledWidget):
     def handle_repayment(self, row):
         """Process asset repayment."""
         try:
-            amount_input = self.assets_table.cellWidget(row, 3)  # Updated index
-            interest_input = self.assets_table.cellWidget(row, 4)  # Updated index
-            date_input = self.assets_table.cellWidget(row, 5)  # Updated index
+            amount_input = self.assets_table.cellWidget(row, 2)  # Updated index
+            interest_input = self.assets_table.cellWidget(row, 3)  # Updated index
+            date_input = self.assets_table.cellWidget(row, 4)  # Updated index
             
             amount = float(amount_input.text())
             interest = float(interest_input.text())
@@ -371,7 +487,7 @@ class LoanUpdatePage(StyledWidget):
             self.loan_table.setItem(row_idx, 4, QTableWidgetItem(f"{float(amount_due):,.2f}" if amount_due else "0.00"))
             
             # Add update button
-            update_button = QPushButton("Update Amount")
+            update_button = QPushButton("Repay Amount")
             update_button.clicked.connect(lambda checked, lid=loan_id: self.show_update_section(lid))
             self.loan_table.setCellWidget(row_idx, 5, update_button)
 

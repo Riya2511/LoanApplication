@@ -19,6 +19,7 @@ class GenerateReport(StyledWidget):
         self.update_group = None
         self.assets_table = None
         self.loan_payments_table = None
+        self.selected_year = None
         self.init_ui()
         
         # Hide elements initially
@@ -27,6 +28,28 @@ class GenerateReport(StyledWidget):
         self.generate_pdf_button.setEnabled(False)
 
     def init_ui(self):
+        # Year Selection
+        year_layout = QHBoxLayout()
+        self.year_dropdown = QComboBox()
+        self.year_dropdown.setFixedWidth(200)
+        
+        # Get current year
+        current_year = datetime.now().year
+        
+        # Add years to dropdown (last 10 years)
+        self.year_dropdown.addItem("All Years", None)
+        for year in range(current_year, current_year - 10, -1):
+            self.year_dropdown.addItem(str(year), year)
+        
+        year_layout.addWidget(QLabel("Select Year:"))
+        year_layout.addWidget(self.year_dropdown)
+        year_layout.addStretch(1)
+        
+        # Connect year selection change
+        self.year_dropdown.currentIndexChanged.connect(self.on_year_selected)
+        
+        self.content_layout.addLayout(year_layout)
+
         # Summary Section (Total Customers and Loan Amount Due)
         summary_layout = QVBoxLayout()
 
@@ -77,7 +100,6 @@ class GenerateReport(StyledWidget):
         # Call method to refresh summary data
         self.refresh_summary_data()
 
-
         # Customer Selection Section with Search Functionality
         customer_layout = QHBoxLayout()
         self.customer_dropdown = QComboBox()
@@ -110,9 +132,9 @@ class GenerateReport(StyledWidget):
         self.customer_info_group.setLayout(customer_info_layout)
         self.content_layout.addWidget(self.customer_info_group)
 
-       # Update Loan Details Table headers
+        # Update Loan Details Table headers
         self.loan_details_table = QTableWidget()
-        self.loan_details_table.setColumnCount(7)  # Increased to include loan_account_number
+        self.loan_details_table.setColumnCount(7)  # Includes loan_account_number
         self.loan_details_table.setHorizontalHeaderLabels([
             "Loan Date", "Loan Account Number", "Total Assets", "Total Weight (g)", 
             "Total Amount (₹)", "Amount Due (₹)", ""
@@ -128,11 +150,11 @@ class GenerateReport(StyledWidget):
         self.update_group.setVisible(False)
         update_layout = QVBoxLayout()
 
-        # Update Assets Table headers
+        # Update Assets Table headers - Fix: remove reference_id column
         self.assets_table = QTableWidget()
-        self.assets_table.setColumnCount(3)  # Reduced column count
+        self.assets_table.setColumnCount(2)  # Only description and weight
         self.assets_table.setHorizontalHeaderLabels([
-            "Reference Id", "Asset Description", "Weight (g)"
+            "Asset Description", "Weight (g)"
         ])
         self.assets_table.setColumnWidth(0, 250)
         update_layout.addWidget(self.assets_table)
@@ -185,9 +207,25 @@ class GenerateReport(StyledWidget):
 
         self.content_layout.addStretch(1)
 
+    def on_year_selected(self):
+        """Handle year selection change"""
+        self.selected_year = self.year_dropdown.currentData()
+        # Reset customer selection
+        self.customer_dropdown.setCurrentIndex(0)
+        # Update summary data for selected year
+        self.refresh_summary_data()
+        # Update customer dropdown with customers from selected year
+        self.populate_customer_dropdown()
+        # Hide customer info and loan details
+        self.customer_info_group.setVisible(False)
+        self.loan_details_table.setVisible(False)
+        self.update_group.setVisible(False)
+        self.generate_pdf_button.setEnabled(False)
+
     def refresh_summary_data(self):
         """Refresh the summary statistics for total customers and loan amount due."""
-        total_customers, total_loan_due = DatabaseManager.get_summary_stats()
+        year = self.selected_year
+        total_customers, total_loan_due = DatabaseManager.get_summary_stats_to_generate_report(year)
 
         # Update the labels
         self.total_customers_label.setText(f"Total Customers: {total_customers}")
@@ -198,11 +236,10 @@ class GenerateReport(StyledWidget):
         self.assets_table.setRowCount(0)
         assets = DatabaseManager.fetch_loan_assets(loan_id)
         
-        for row_idx, (reference_id, description, weight) in enumerate(assets):
+        for row_idx, (description, weight) in enumerate(assets):
             self.assets_table.insertRow(row_idx)
-            self.assets_table.setItem(row_idx, 0, QTableWidgetItem(str(reference_id)))
-            self.assets_table.setItem(row_idx, 1, QTableWidgetItem(description))
-            self.assets_table.setItem(row_idx, 2, QTableWidgetItem(f"{weight}"))
+            self.assets_table.setItem(row_idx, 0, QTableWidgetItem(description))
+            self.assets_table.setItem(row_idx, 1, QTableWidgetItem(f"{weight}"))
 
     def populate_loan_payments_table(self, loan_id):
         """Populate the loan payments table with payment history."""
@@ -242,6 +279,8 @@ class GenerateReport(StyledWidget):
     def showEvent(self, event: QEvent):
         """Handle page load event and refresh customer data."""
         if event.type() == QEvent.Show:
+            # Reset year selection to All Years
+            self.year_dropdown.setCurrentIndex(0)
             self.populate_customer_dropdown()
             # Reset selection and hide elements
             self.customer_dropdown.setCurrentIndex(0)
@@ -257,7 +296,7 @@ class GenerateReport(StyledWidget):
         # Add the initial placeholder
         self.customer_dropdown.addItem("Select a customer", None)
         
-        customers = DatabaseManager.get_all_customers()
+        customers = DatabaseManager.get_customers_by_year(self.selected_year)
         if customers:
             for customer_id, name, account_number in customers:
                 self.customer_dropdown.addItem(f"{name}", customer_id)
@@ -268,7 +307,7 @@ class GenerateReport(StyledWidget):
         # Always add the initial placeholder
         self.customer_dropdown.addItem("Select a customer", None)
         
-        customers = DatabaseManager.get_all_customers()
+        customers = DatabaseManager.get_customers_by_year(self.selected_year)
         
         filtered_customers = [
             (customer_id, name, account_number) 
@@ -322,7 +361,8 @@ class GenerateReport(StyledWidget):
         if not self.selected_customer_id:
             return
             
-        loans = DatabaseManager.fetch_loans_for_customer(self.selected_customer_id)
+        # Get loans filtered by year if selected
+        loans = DatabaseManager.fetch_loans_for_customer_to_generate_report(self.selected_customer_id, self.selected_year)
         
         if not loans:
             return
@@ -330,7 +370,7 @@ class GenerateReport(StyledWidget):
         for row_idx, loan in enumerate(loans):
             self.loan_details_table.insertRow(row_idx)
             
-            # Reorganize columns to include loan_account_number
+            # Format the loan data for display
             loan_date = datetime.strptime(loan[0], "%Y-%m-%d").strftime("%d-%m-%Y")
             loan_account_number = loan[6]  # Get loan_account_number from the tuple
             asset_descriptions = loan[1]
@@ -357,13 +397,18 @@ class GenerateReport(StyledWidget):
             return
         try:
             customer_info = DatabaseManager.get_customer_by_id(self.selected_customer_id)
-            loans = DatabaseManager.fetch_loans_for_customer(self.selected_customer_id)
+            loans = DatabaseManager.fetch_loans_for_customer_to_generate_report(self.selected_customer_id, self.selected_year)
 
             pdf = FPDF()
             
             pdf.add_page()
             pdf.set_font('Arial', 'B', 16)
-            pdf.cell(0, 10, "Customer Loan Report", 0, 1)
+            
+            # Add report title with year filter if applicable
+            if self.selected_year:
+                pdf.cell(0, 10, f"Customer Loan Report ({self.selected_year})", 0, 1)
+            else:
+                pdf.cell(0, 10, "Customer Loan Report (All Years)", 0, 1)
 
             # Customer Information
             pdf.set_font('Arial', '', 12)
@@ -380,7 +425,7 @@ class GenerateReport(StyledWidget):
                 pdf.set_font('Arial', '', 12)
                 loan_date = datetime.strptime(loan[0], "%Y-%m-%d")
                 pdf.cell(0, 10, f"Loan Date: {loan_date.strftime('%d-%m-%Y')}", 0, 1)
-                pdf.cell(0, 10, f"Loan Account Number: {loan[6]}", 0, 1)  # Add loan account number
+                pdf.cell(0, 10, f"Loan Account Number: {loan[6]}", 0, 1)
                 pdf.cell(0, 10, f"Total Weight: {float(loan[2])} g", 0, 1)
                 pdf.cell(0, 10, f"Total Loan Amount: ₹{float(loan[3]):,.2f}", 0, 1)
                 pdf.cell(0, 10, f"Amount Due: ₹{float(loan[4]):,.2f}", 0, 1)
@@ -392,8 +437,7 @@ class GenerateReport(StyledWidget):
                 assets = DatabaseManager.fetch_loan_assets(loan[7])  # Using loan_id
                 pdf.set_font('Arial', '', 12)
                 if assets:
-                    for reference_id, desc, weight in assets:
-                        pdf.cell(0, 10, f"  Reference Id: {reference_id}", 0, 1)
+                    for desc, weight in assets:
                         pdf.cell(0, 10, f"  Asset Description: {desc}", 0, 1)
                         pdf.cell(0, 10, f"  Weight: {weight}g", 0, 1)
                         pdf.ln(2)
@@ -404,7 +448,7 @@ class GenerateReport(StyledWidget):
                 pdf.ln(5)
                 pdf.set_font('Arial', 'B', 12)
                 pdf.cell(0, 10, "Payment History:", 0, 1)
-                payments = DatabaseManager.fetch_loan_payments(loan[-2])
+                payments = DatabaseManager.fetch_loan_payments(loan[7])
                 pdf.set_font('Arial', '', 12)
                 if payments:
                     for payment in payments:
@@ -421,11 +465,14 @@ class GenerateReport(StyledWidget):
                 pdf.ln(10)
                 pdf.cell(0, 0, "_" * 50, 0, 1)  # Add separator line between loans
 
-            # Save PDF
-            filename = f"customer_loan_report_{customer_info.get('name', 'unknown')}_{datetime.now().strftime('%Y%m%d')}.pdf"
+            # Generate year-specific filename if applicable
+            if self.selected_year:
+                filename = f"customer_loan_report_{customer_info.get('name', 'unknown')}_{self.selected_year}_{datetime.now().strftime('%Y%m%d')}.pdf"
+            else:
+                filename = f"customer_loan_report_{customer_info.get('name', 'unknown')}_{datetime.now().strftime('%Y%m%d')}.pdf"
+                
             pdf.output(filename)
             QMessageBox.information(self, "Success", f"Report generated: {filename}")
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to generate report: {str(e)}")
-            
