@@ -251,6 +251,7 @@ class LoanRegistrationPage(StyledWidget):
             return
             
         loans = DatabaseManager.fetch_loans_for_customer(self.selected_customer_id)
+        loans = sorted(loans, key=lambda loan: loan[0], reverse=True)
         self.loans_table.setRowCount(len(loans))
 
         for row, loan in enumerate(loans):

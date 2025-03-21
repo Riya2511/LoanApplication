@@ -295,6 +295,7 @@ class LoanUpdatePage(StyledWidget):
         repayments = DatabaseManager.fetch_loan_payments(loan_id)
         
         if repayments:
+            repayments = sorted(repayments, key=lambda repayment: repayment['payment_date'], reverse=True)
             for row_idx, repayment in enumerate(repayments):
                 self.repayment_table.insertRow(row_idx)
                 
@@ -506,7 +507,7 @@ class LoanUpdatePage(StyledWidget):
         
         if not loans:
             return
-        
+        loans = sorted(loans, key=lambda loan: loan[0], reverse=True)
         for row_idx, loan_data in enumerate(loans):
             self.loan_table.insertRow(row_idx)
             

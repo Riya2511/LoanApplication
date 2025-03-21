@@ -247,6 +247,7 @@ class GenerateReport(StyledWidget):
         repayments = DatabaseManager.fetch_loan_payments(loan_id)
         
         if repayments:
+            repayments = sorted(repayments, key=lambda payment: datetime.strptime(str(payment['payment_date']).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d"), reverse=True)
             for row_idx, repayment in enumerate(repayments):
                 self.loan_payments_table.insertRow(row_idx)
                 
@@ -366,7 +367,7 @@ class GenerateReport(StyledWidget):
         
         if not loans:
             return
-        
+        loans = sorted(loans, key=lambda loan: datetime.strptime(str(loan[0]).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d"), reverse=True)
         for row_idx, loan in enumerate(loans):
             self.loan_details_table.insertRow(row_idx)
             
@@ -493,6 +494,7 @@ class GenerateReport(StyledWidget):
                     payments = DatabaseManager.fetch_loan_payments(loan[7])
                     pdf.set_font('Arial', '', 12)
                     if payments:
+                        payments = sorted(payments, key=lambda payment: datetime.strptime(str(payment['payment_date']).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d"), reverse=True)
                         for payment in payments:
                             try:
                                 payment_date = datetime.strptime(
