@@ -82,8 +82,8 @@ class MainWindow(QWidget):
 
 def main():
     # Uncomment the following line if you want to verify pendrive
-    # if not verifyPendrive():
-    #     return
+    if not verifyPendrive():
+        return
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
