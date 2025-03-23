@@ -18,12 +18,24 @@ class LoanRegistrationPage(StyledWidget):
         self.init_ui()
 
     def init_ui(self):
-        customer_layout = QHBoxLayout()
+        # Create a customer selection layout with search functionality
+        customer_layout = QVBoxLayout()  # Changed to QVBoxLayout to stack search box and dropdown
+        
+        # Add a search box
+        self.search_box = QLineEdit()
+        self.search_box.setPlaceholderText("Search customers...")
+        self.search_box.setFixedWidth(300)
+        self.search_box.textChanged.connect(self.filter_customers)
+        customer_layout.addWidget(self.search_box, alignment=Qt.AlignRight)
+        
+        # Customer dropdown in a horizontal layout
+        dropdown_layout = QHBoxLayout()
         self.customer_dropdown = QComboBox()
         self.customer_dropdown.setFixedWidth(300)
-        self.customer_dropdown.addItem("Select Customer", None)  # Add default option
-        customer_layout.addWidget(QLabel("Select Customer:"))
-        customer_layout.addWidget(self.customer_dropdown)
+        dropdown_layout.addWidget(QLabel("Select Customer:"))
+        dropdown_layout.addWidget(self.customer_dropdown)
+        customer_layout.addLayout(dropdown_layout)
+        
         self.content_layout.addLayout(customer_layout)
 
         self.customer_info_group = QGroupBox("Customer Information")
@@ -33,7 +45,13 @@ class LoanRegistrationPage(StyledWidget):
                 border-radius: 5px;
                 margin-top: 10px;
                 margin-bottom: 10px;
-                padding-top: 20px;
+                padding: 20px;
+                background-color: white;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
                 background-color: white;
             }
         """)
@@ -219,10 +237,21 @@ class LoanRegistrationPage(StyledWidget):
     def populate_customer_dropdown(self):
         self.customer_dropdown.clear()
         self.customer_dropdown.addItem("Select Customer", None)  # Add default option
+        
+        # Initialize customer data list
+        self.all_customers_data = []
+        
         customers = DatabaseManager.get_all_customers()
         if customers:
-            for customer_id, name, account_number in customers:
+            for customer_id, name, phone in customers:
                 self.customer_dropdown.addItem(f"{name}", customer_id)
+                
+                # Store customer data for filtering
+                self.all_customers_data.append({
+                    'id': customer_id,
+                    'name': name,
+                    'phone': phone if phone else ''
+                })
 
     def on_customer_selected(self, index):
         # Clean up existing edit section if it exists
@@ -532,3 +561,26 @@ class LoanRegistrationPage(StyledWidget):
                 self.remove_edit_section()  # Remove edit section if it's showing the deleted loan
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to delete loan: {str(e)}")
+
+    def filter_customers(self):
+        """Filter dropdown options based on search box input"""
+        search_text = self.search_box.text().strip().lower()
+
+        self.customer_dropdown.blockSignals(True)
+        self.customer_dropdown.clear()
+        self.customer_dropdown.addItem("Select Customer", None)  # Keep the default option
+
+        # Add matching customers
+        matching_customers = []
+        for customer in self.all_customers_data:
+            if (search_text in customer['name'].lower() or 
+                (customer['phone'] and search_text in customer['phone'].lower())):
+                matching_customers.append(customer)
+                self.customer_dropdown.addItem(f"{customer['name']}", customer['id'])
+
+        self.customer_dropdown.blockSignals(False)
+        
+        # If there's exactly one match, select that customer
+        if len(matching_customers) == 1:
+            self.customer_dropdown.setCurrentIndex(1)  # First item after "Select Customer"
+            # self.on_customer_selected(1)
