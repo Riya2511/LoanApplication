@@ -32,7 +32,15 @@ class GenerateReport(StyledWidget):
         year_layout = QHBoxLayout()
         self.year_dropdown = QComboBox()
         self.year_dropdown.setFixedWidth(200)
-        
+        self.year_dropdown.setStyleSheet("""
+            QComboBox {
+                font-size: 16px;
+            }
+            QComboBox QAbstractItemView {
+                font-size: 16px;
+                min-height: 30px;  /* This increases the line height of dropdown items */
+            }
+        """)
         # Get current year
         current_year = datetime.now().year
         
@@ -104,6 +112,15 @@ class GenerateReport(StyledWidget):
         customer_layout = QHBoxLayout()
         self.customer_dropdown = QComboBox()
         self.customer_dropdown.setFixedWidth(500)
+        self.customer_dropdown.setStyleSheet("""
+            QComboBox {
+                font-size: 16px;
+            }
+            QComboBox QAbstractItemView {
+                font-size: 16px;
+                min-height: 30px;  /* This increases the line height of dropdown items */
+            }
+        """)
         self.customer_search = QLineEdit()
         self.customer_search.setPlaceholderText("Search Customer")
         self.customer_search.textChanged.connect(self.filter_customers)

@@ -801,7 +801,7 @@ class DatabaseManager:
             
             # Add year filter if specified
             if year:
-                query += " AND strftime('%Y', l.loan_date) = ?"
+                query += " AND strftime('%Y', l.created_at) = ?"
                 query_params.append(str(year))
                 
             cursor.execute(query, query_params)

@@ -123,6 +123,15 @@ class LoanUpdatePage(StyledWidget):
         # Customer dropdown (existing code)
         self.customer_dropdown = QComboBox()
         self.customer_dropdown.setFixedWidth(300)
+        self.customer_dropdown.setStyleSheet("""
+            QComboBox {
+                font-size: 16px;
+            }
+            QComboBox QAbstractItemView {
+                font-size: 16px;
+                min-height: 30px;  /* This increases the line height of dropdown items */
+            }
+        """)
         customer_layout.addWidget(self.customer_dropdown, alignment=Qt.AlignCenter)
 
         self.content_layout.addLayout(customer_layout)

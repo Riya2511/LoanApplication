@@ -41,7 +41,7 @@ class StyledWidget(QWidget):
             }
             QLabel.error {
                 color: red;
-                font-size: 12px;
+                font-size: 14px;
             }
         """)
         

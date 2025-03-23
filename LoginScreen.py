@@ -85,7 +85,7 @@ class LoginScreen(QWidget):
 
         # Password input
         password_label = QLabel("Enter System Password:")
-        password_label.setStyleSheet("font-size: 12px;")
+        password_label.setStyleSheet("font-size: 14px;")
         central_layout.addWidget(password_label)
 
         self.password_input = QLineEdit()

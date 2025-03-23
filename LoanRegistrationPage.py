@@ -32,6 +32,15 @@ class LoanRegistrationPage(StyledWidget):
         dropdown_layout = QHBoxLayout()
         self.customer_dropdown = QComboBox()
         self.customer_dropdown.setFixedWidth(300)
+        self.customer_dropdown.setStyleSheet("""
+            QComboBox {
+                font-size: 16px;
+            }
+            QComboBox QAbstractItemView {
+                font-size: 16px;
+                min-height: 30px;  /* This increases the line height of dropdown items */
+            }
+        """)
         dropdown_layout.addWidget(QLabel("Select Customer:"))
         dropdown_layout.addWidget(self.customer_dropdown)
         customer_layout.addLayout(dropdown_layout)

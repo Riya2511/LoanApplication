@@ -68,7 +68,7 @@ class RegisterCustomerPage(StyledWidget):
         self.address_error = QLabel()
 
         for label in [self.name_error, self.phone_error, self.address_error]:
-            label.setStyleSheet("color: red; font-size: 12px;")
+            label.setStyleSheet("color: red; font-size: 14px;")
 
         # Add to layout
         form_layout.addRow("Name:", self.name_input)
@@ -144,6 +144,15 @@ class RegisterCustomerPage(StyledWidget):
         self.customer_dropdown.setFixedWidth(300)
         self.customer_dropdown.setEditable(False)  # Disable editing
         self.customer_dropdown.currentIndexChanged.connect(self.load_customer_details)
+        self.customer_dropdown.setStyleSheet("""
+            QComboBox {
+                font-size: 14px;
+            }
+            QComboBox QAbstractItemView {
+                font-size: 14px;
+                min-height: 30px;  /* This increases the line height of dropdown items */
+            }
+        """)
         dropdown_layout.addWidget(self.customer_dropdown)
 
         edit_layout.addLayout(dropdown_layout)
@@ -163,7 +172,7 @@ class RegisterCustomerPage(StyledWidget):
         self.edit_address_error = QLabel()
 
         for label in [self.edit_name_error, self.edit_phone_error, self.edit_address_error]:
-            label.setStyleSheet("color: red; font-size: 12px;")
+            label.setStyleSheet("color: red; font-size: 14px;")
 
         form_layout.addRow("Name:", self.edit_name_input)
         form_layout.addRow("", self.edit_name_error)
