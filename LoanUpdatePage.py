@@ -102,6 +102,7 @@ class LoanUpdatePage(StyledWidget):
         self.update_group = None
         self.assets_table = None
         self.repayment_table = None
+        self.all_customers_data = []  # Add this line
         self.init_ui()
         
         # Hide tables initially
@@ -110,11 +111,20 @@ class LoanUpdatePage(StyledWidget):
 
     def init_ui(self):
         # Customer Selection Section
-        customer_layout = QHBoxLayout()
+        customer_layout = QVBoxLayout()  # Change to QVBoxLayout
+
+        # Add search box
+        self.customer_search = QLineEdit()
+        self.customer_search.setPlaceholderText("Search customers...")
+        self.customer_search.setFixedWidth(300)
+        self.customer_search.textChanged.connect(self.filter_customers)
+        customer_layout.addWidget(self.customer_search, alignment=Qt.AlignCenter)
+
+        # Customer dropdown (existing code)
         self.customer_dropdown = QComboBox()
         self.customer_dropdown.setFixedWidth(300)
-        customer_layout.addWidget(QLabel("Select Customer:"))
-        customer_layout.addWidget(self.customer_dropdown)
+        customer_layout.addWidget(self.customer_dropdown, alignment=Qt.AlignCenter)
+
         self.content_layout.addLayout(customer_layout)
 
         # Add a placeholder item
@@ -468,13 +478,23 @@ class LoanUpdatePage(StyledWidget):
     def populate_customer_dropdown(self):
         """Populate the dropdown with the latest customer data."""
         self.customer_dropdown.clear()
+        self.all_customers_data = []  # Clear existing data
+        
         # Add the initial placeholder
         self.customer_dropdown.addItem("Select a customer", None)
         
         customers = DatabaseManager.get_all_customers()
         if customers:
             for customer_id, name, phone in customers:
-                self.customer_dropdown.addItem(f"{name}", customer_id)
+                display_text = f"{name} - {phone}" if phone else f"{name}"
+                self.customer_dropdown.addItem(display_text, customer_id)
+                # Store customer data for filtering
+                self.all_customers_data.append({
+                    'id': customer_id,
+                    'name': name,
+                    'phone': phone if phone else '',
+                    'display': display_text
+                })
 
     def on_customer_selected(self, index):
         """Display loans for the selected customer."""
@@ -624,3 +644,31 @@ class LoanUpdatePage(StyledWidget):
         """Hide the update section."""
         self.update_group.setVisible(False)
         self.current_loan_id = None  # Reset the current loan ID
+
+    def filter_customers(self):
+        """Filter dropdown options based on search box input"""
+        search_text = self.customer_search.text().strip().lower()
+
+        self.customer_dropdown.blockSignals(True)
+        self.customer_dropdown.clear()
+        
+        # Always add the placeholder
+        self.customer_dropdown.addItem("Select a customer", None)
+
+        # Add matching customers
+        matching_customers = []
+        for customer in self.all_customers_data:
+            if (search_text in customer['name'].lower() or 
+                search_text in customer['phone'].lower()):
+                matching_customers.append(customer)
+                self.customer_dropdown.addItem(customer['display'], customer['id'])
+
+        self.customer_dropdown.blockSignals(False)
+        
+        # If there's exactly one match, select that customer
+        if len(matching_customers) == 1:
+            self.customer_dropdown.setCurrentIndex(1)  # Index 1 because index 0 is the placeholder
+        else:
+            # Otherwise select the placeholder
+            self.customer_dropdown.setCurrentIndex(0)
+        
