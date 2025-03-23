@@ -817,3 +817,20 @@ class DatabaseManager:
             return 0, 0
         finally:
             conn.close()
+
+    @staticmethod
+    def get_loan_amount_due(loan_id):
+        """Get the amount due for a specific loan."""
+        try:
+            conn = DatabaseManager.create_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT loan_amount_due FROM LoanView WHERE loan_id = ?", 
+                (loan_id,)
+            )
+            result = cursor.fetchone()
+            conn.close()
+            return float(result[0]) if result else 0
+        except Exception as e:
+            print(f"Error fetching loan amount due: {e}")
+            return float('inf')  # Return infinity if error, to ensure button remains disabled

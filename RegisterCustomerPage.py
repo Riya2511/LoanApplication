@@ -129,17 +129,24 @@ class RegisterCustomerPage(StyledWidget):
         # Increase spacing between heading and dropdown
         edit_layout.addSpacing(15)  
 
-        # Create dropdown with search function
+        # Create dropdown container
+        dropdown_layout = QVBoxLayout()
+
+        # Search Box
+        self.search_box = QLineEdit()
+        self.search_box.setPlaceholderText("Search customers...")
+        self.search_box.setFixedWidth(300)
+        self.search_box.textChanged.connect(self.filter_customers)
+        dropdown_layout.addWidget(self.search_box)
+
+        # Dropdown
         self.customer_dropdown = QComboBox()
         self.customer_dropdown.setFixedWidth(300)
-        self.customer_dropdown.setEditable(True)  # Make it editable to allow search
-        self.customer_dropdown.setInsertPolicy(QComboBox.NoInsert)  # Don't add entered text as a new item
-        self.customer_dropdown.completer().setCompletionMode(QCompleter.PopupCompletion)  # Show popup with matching items
-        self.customer_dropdown.completer().setFilterMode(Qt.MatchContains)  # Match if text appears anywhere
-        self.customer_dropdown.editTextChanged.connect(self.filter_customers)  # Connect to filter function
+        self.customer_dropdown.setEditable(False)  # Disable editing
         self.customer_dropdown.currentIndexChanged.connect(self.load_customer_details)
+        dropdown_layout.addWidget(self.customer_dropdown)
 
-        edit_layout.addWidget(self.customer_dropdown)
+        edit_layout.addLayout(dropdown_layout)
 
         # Edit form
         form_layout = QFormLayout()
@@ -177,40 +184,32 @@ class RegisterCustomerPage(StyledWidget):
         edit_layout.addWidget(self.save_btn)
 
         return edit_layout
-    
-    def filter_customers(self, text):
-        """Filter customers as user types in the dropdown"""
-        if not hasattr(self, 'all_customers_data'):
-            # First time, store all customers
-            self.all_customers_data = []
-            for i in range(self.customer_dropdown.count()):
-                name = self.customer_dropdown.itemText(i)
-                id = self.customer_dropdown.itemData(i)
-                customer = DatabaseManager.get_customer_by_id(id)
-                if customer:
-                    self.all_customers_data.append({
-                        'id': id,
-                        'name': customer['name'],
-                        'phone': customer['phone'] or '',
-                        'address': customer['address'] or '',
-                        'display': name
-                    })
-        
-        # Clear current items except the one being edited
-        current_text = self.customer_dropdown.currentText()
+
+    def filter_customers(self):
+        """Filter dropdown options based on search box input"""
+        search_text = self.search_box.text().strip().lower()
+
         self.customer_dropdown.blockSignals(True)
         self.customer_dropdown.clear()
-        
-        # Filter and add matching items
-        for customer in self.all_customers_data:
-            if (text.lower() in customer['name'].lower() or 
-                text.lower() in customer['phone'].lower() or 
-                text.lower() in customer['address'].lower()):
-                self.customer_dropdown.addItem(customer['display'], customer['id'])
-        
-        self.customer_dropdown.setEditText(current_text)
-        self.customer_dropdown.blockSignals(False)
 
+        # Add matching customers
+        matching_customers = []
+        for customer in self.all_customers_data:
+            if (search_text in customer['name'].lower() or 
+                search_text in customer['phone'].lower()):
+                matching_customers.append(customer)
+                self.customer_dropdown.addItem(customer['display'], customer['id'])
+
+        self.customer_dropdown.blockSignals(False)
+        
+        # If there's exactly one match, force-load that customer's details
+        if len(matching_customers) == 1:
+            self.load_customer_details()
+        # If there are no matches, clear the edit fields
+        elif len(matching_customers) == 0:
+            self.edit_name_input.clear()
+            self.edit_phone_input.clear()
+            self.edit_address_input.clear()
 
     def validate_csv_row(self, row, row_number):
         """Validate a single row from CSV"""
@@ -393,13 +392,19 @@ class RegisterCustomerPage(StyledWidget):
     def load_customers(self):
         """Loads customer names into dropdown"""
         self.customer_dropdown.clear()
+        self.all_customers_data = []
+
         customers = DatabaseManager.get_all_customers()
         for customer in customers:
-            self.customer_dropdown.addItem(f"{customer[1]}", customer[0])
-        
-        # Reset stored customers data whenever we reload
-        if hasattr(self, 'all_customers_data'):
-            delattr(self, 'all_customers_data')
+            display_text = f"{customer[1]} - {customer[2]}" if customer[2] else f"{customer[1]}"
+            self.customer_dropdown.addItem(display_text, customer[0])
+            self.all_customers_data.append({
+                'id': customer[0],
+                'name': customer[1],
+                'phone': customer[2] if customer[2] else '',
+                'display': display_text
+            })
+
 
     def load_customer_details(self):
         """Loads customer details into the edit form"""

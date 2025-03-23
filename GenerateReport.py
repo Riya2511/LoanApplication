@@ -103,14 +103,14 @@ class GenerateReport(StyledWidget):
         # Customer Selection Section with Search Functionality
         customer_layout = QHBoxLayout()
         self.customer_dropdown = QComboBox()
-        self.customer_dropdown.setFixedWidth(300)
+        self.customer_dropdown.setFixedWidth(500)
         self.customer_search = QLineEdit()
         self.customer_search.setPlaceholderText("Search Customer")
         self.customer_search.textChanged.connect(self.filter_customers)
         
         customer_layout.addWidget(QLabel("Select Customer:"))
-        customer_layout.addWidget(self.customer_dropdown)
         customer_layout.addWidget(self.customer_search)
+        customer_layout.addWidget(self.customer_dropdown)
         self.content_layout.addLayout(customer_layout)
 
         # Add initial placeholder item
@@ -159,6 +159,7 @@ class GenerateReport(StyledWidget):
             "Loan Date", "Registered Reference Id", "Total Assets", "Total Weight (g)", 
             "Total Amount (₹)", "Amount Due (₹)", ""
         ])
+        self.loan_details_table.setColumnWidth(1, 200)
         self.loan_details_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.loan_details_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.loan_details_table.setSelectionMode(QTableWidget.SingleSelection)
@@ -337,7 +338,7 @@ class GenerateReport(StyledWidget):
         ]
         if filtered_customers:
             for customer_id, name, account_number in filtered_customers:
-                self.customer_dropdown.addItem(f"{name} - {account_number}", customer_id)
+                self.customer_dropdown.addItem(f"{name} - {account_number}" if account_number else f"{name}", customer_id)
 
     def on_customer_selected(self, index):
         """Display customer information and loans when a customer is selected."""

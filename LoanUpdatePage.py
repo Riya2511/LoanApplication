@@ -199,6 +199,10 @@ class LoanUpdatePage(StyledWidget):
             QPushButton:hover {
                 background-color: #ff0000;
             }
+            QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666666;
+            }
         """)
         
         self.cancel_button = QPushButton("Close")
@@ -352,6 +356,14 @@ class LoanUpdatePage(StyledWidget):
                 self.populate_repayment_table(self.current_loan_id)
                 self.populate_loans_table()
                 
+                # Update delete button state
+                amount_due = DatabaseManager.get_loan_amount_due(self.current_loan_id)
+                self.delete_button.setEnabled(amount_due <= 0)
+                if amount_due > 0:
+                    self.delete_button.setToolTip("Loan can only be deleted when fully repaid (amount due ≤ 0)")
+                else:
+                    self.delete_button.setToolTip("Delete this loan")
+                
                 QMessageBox.information(self, "Success", "Payment updated successfully!")
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to update payment: {str(e)}")
@@ -428,6 +440,12 @@ class LoanUpdatePage(StyledWidget):
             self.populate_assets_table(self.current_loan_id)
             self.populate_repayment_table(self.current_loan_id)
             self.populate_loans_table()
+            amount_due = DatabaseManager.get_loan_amount_due(self.current_loan_id)
+            self.delete_button.setEnabled(amount_due <= 0)
+            if amount_due > 0:
+                self.delete_button.setToolTip("Loan can only be deleted when fully repaid (amount due ≤ 0)")
+            else:
+                self.delete_button.setToolTip("Delete this loan")
             
             QMessageBox.information(self, "Success", "Payment recorded successfully!")
             
@@ -545,7 +563,7 @@ class LoanUpdatePage(StyledWidget):
             # Add update button
             update_button = QPushButton("Repay Amount")
             update_button.clicked.connect(lambda checked, lid=loan_id: self.show_update_section(lid))
-            self.loan_table.setCellWidget(row_idx, 5, update_button)
+            self.loan_table.setCellWidget(row_idx, 6, update_button)
 
     def show_update_section(self, loan_id):
         """Show the update section with loan details and assets."""
@@ -555,6 +573,16 @@ class LoanUpdatePage(StyledWidget):
         # Populate both tables with loan data
         self.populate_assets_table(loan_id)
         self.populate_repayment_table(loan_id)
+        
+        # Check amount due for this loan and enable/disable delete button
+        amount_due = DatabaseManager.get_loan_amount_due(loan_id)
+        self.delete_button.setEnabled(amount_due <= 0)
+        
+        # Optionally add a tooltip to inform the user why the button is disabled
+        if amount_due > 0:
+            self.delete_button.setToolTip("Loan can only be deleted when fully repaid (amount due ≤ 0)")
+        else:
+            self.delete_button.setToolTip("Delete this loan")
 
     def delete_loan_entry(self):
         """Delete the selected loan entry."""

@@ -152,13 +152,16 @@ class LoanRegistrationPage(StyledWidget):
 
     def register_loan(self):
         try:
-            loan_amount = float(self.loan_amount_input.text().strip())
-            if loan_amount <= 0:
-                raise ValueError("Loan amount must be positive.")
-
             registered_reference_id = self.loan_account_input.text().strip()
             if not registered_reference_id:
                 raise ValueError("Registered Reference Id cannot be empty.")
+
+            loan_amount = self.loan_amount_input.text().strip()
+            if not loan_amount:
+                raise ValueError('Loan Amount cannot be empty.')
+            loan_amount = float(loan_amount)
+            if loan_amount <= 0:
+                raise ValueError("Loan amount must be positive.")
 
             asset_description = self.asset_description_input.text().strip()
             if not asset_description:
@@ -307,20 +310,42 @@ class LoanRegistrationPage(StyledWidget):
             # Add "Delete Loan" Button
             delete_button = QPushButton("Delete Loan")
             delete_button.setFixedSize(90, 30)
-            delete_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #F44336;
-                    color: white;
-                    border-radius: 8px;
-                    font-weight: bold;
-                    font-size: 11px;
-                    margin-top: 5px;
-                    margin-left: 5px;
-                }
-                QPushButton:hover {
-                    background-color: #D32F2F;
-                }
-            """)
+
+            # Check if loan is completed (amount due is 0 or less)
+            is_completed = float(loan[4]) <= 0
+
+            # Enable/disable the button based on status
+            delete_button.setEnabled(is_completed)
+
+            # Apply appropriate styling based on button state
+            if is_completed:
+                delete_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #F44336;
+                        color: white;
+                        border-radius: 8px;
+                        font-weight: bold;
+                        font-size: 11px;
+                        margin-top: 5px;
+                        margin-left: 5px;
+                    }
+                    QPushButton:hover {
+                        background-color: #D32F2F;
+                    }
+                """)
+            else:
+                delete_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #cccccc;
+                        color: #666666;
+                        border-radius: 8px;
+                        font-weight: bold;
+                        font-size: 11px;
+                        margin-top: 5px;
+                        margin-left: 5px;
+                    }
+                """)
+
             delete_button.clicked.connect(lambda _, loan_id=loan[7]: self.delete_loan(loan_id))
             self.loans_table.setCellWidget(row, 9, delete_button)  # Column 9 for Delete Button
         
@@ -462,10 +487,14 @@ class LoanRegistrationPage(StyledWidget):
                 raise ValueError("Asset description cannot be empty.")
 
             # Validate numeric inputs
+            if not loan_amount: 
+                raise ValueError('Loan Amount cannot be empty.')
             loan_amount = float(loan_amount)
             if loan_amount <= 0:
                 raise ValueError("Loan amount must be positive.")
                 
+            if not asset_weight: 
+                raise ValueError('Asset weight cannot be empty.')
             asset_weight = float(asset_weight)
             if asset_weight < 0:
                 raise ValueError("Asset weight must be positive.")
@@ -474,17 +503,14 @@ class LoanRegistrationPage(StyledWidget):
             QMessageBox.warning(self, "Input Error", str(e))
             return
 
-        # Update Loan and Asset details
         try:
-            # Update the loan record
             DatabaseManager.update_loan(loan_id, loan_date, registered_reference_id, loan_amount)
             
-            # Update the asset record
             DatabaseManager.update_loan_assets(loan_id, asset_description, asset_weight)
             
             QMessageBox.information(self, "Success", "Loan details updated successfully!")
-            self.remove_edit_section()  # Hide the edit section
-            self.update_loans_table()   # Refresh the table
+            self.remove_edit_section()  
+            self.update_loans_table()   
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to update loan: {str(e)}")
 
