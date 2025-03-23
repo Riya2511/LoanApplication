@@ -4,7 +4,7 @@ import sqlite3
 import re
 import csv
 from PyQt5.QtWidgets import (QPushButton, QLineEdit, QFormLayout, QMessageBox, 
-                           QLabel, QFileDialog, QHBoxLayout, QComboBox, QVBoxLayout, QSizePolicy, QFrame)
+                           QLabel, QFileDialog, QHBoxLayout, QComboBox, QVBoxLayout, QSizePolicy, QFrame, QCompleter)
 from PyQt5.QtCore import Qt
 
 class RegisterCustomerPage(StyledWidget):
@@ -113,11 +113,6 @@ class RegisterCustomerPage(StyledWidget):
         """Creates the edit section UI"""
         edit_layout = QVBoxLayout()
 
-        # Dropdown to select a customer
-        self.customer_dropdown = QComboBox()
-        self.customer_dropdown.setFixedWidth(300)
-        self.customer_dropdown.currentIndexChanged.connect(self.load_customer_details)
-
         heading_label = QLabel("Edit Customer Details")
         heading_label.setAlignment(Qt.AlignCenter)
         heading_label.setStyleSheet("""
@@ -133,6 +128,16 @@ class RegisterCustomerPage(StyledWidget):
 
         # Increase spacing between heading and dropdown
         edit_layout.addSpacing(15)  
+
+        # Create dropdown with search function
+        self.customer_dropdown = QComboBox()
+        self.customer_dropdown.setFixedWidth(300)
+        self.customer_dropdown.setEditable(True)  # Make it editable to allow search
+        self.customer_dropdown.setInsertPolicy(QComboBox.NoInsert)  # Don't add entered text as a new item
+        self.customer_dropdown.completer().setCompletionMode(QCompleter.PopupCompletion)  # Show popup with matching items
+        self.customer_dropdown.completer().setFilterMode(Qt.MatchContains)  # Match if text appears anywhere
+        self.customer_dropdown.editTextChanged.connect(self.filter_customers)  # Connect to filter function
+        self.customer_dropdown.currentIndexChanged.connect(self.load_customer_details)
 
         edit_layout.addWidget(self.customer_dropdown)
 
@@ -172,6 +177,40 @@ class RegisterCustomerPage(StyledWidget):
         edit_layout.addWidget(self.save_btn)
 
         return edit_layout
+    
+    def filter_customers(self, text):
+        """Filter customers as user types in the dropdown"""
+        if not hasattr(self, 'all_customers_data'):
+            # First time, store all customers
+            self.all_customers_data = []
+            for i in range(self.customer_dropdown.count()):
+                name = self.customer_dropdown.itemText(i)
+                id = self.customer_dropdown.itemData(i)
+                customer = DatabaseManager.get_customer_by_id(id)
+                if customer:
+                    self.all_customers_data.append({
+                        'id': id,
+                        'name': customer['name'],
+                        'phone': customer['phone'] or '',
+                        'address': customer['address'] or '',
+                        'display': name
+                    })
+        
+        # Clear current items except the one being edited
+        current_text = self.customer_dropdown.currentText()
+        self.customer_dropdown.blockSignals(True)
+        self.customer_dropdown.clear()
+        
+        # Filter and add matching items
+        for customer in self.all_customers_data:
+            if (text.lower() in customer['name'].lower() or 
+                text.lower() in customer['phone'].lower() or 
+                text.lower() in customer['address'].lower()):
+                self.customer_dropdown.addItem(customer['display'], customer['id'])
+        
+        self.customer_dropdown.setEditText(current_text)
+        self.customer_dropdown.blockSignals(False)
+
 
     def validate_csv_row(self, row, row_number):
         """Validate a single row from CSV"""
@@ -183,7 +222,7 @@ class RegisterCustomerPage(StyledWidget):
         if not name or len(name) < 2:
             errors.append(f"Row {row_number}: Invalid name (must be at least 2 characters)")
 
-        # Phone validation
+        # Phone validation - only if provided
         phone = row[2].strip()
         if phone:
             if not re.match(r'^\d{10}$', phone):
@@ -192,7 +231,7 @@ class RegisterCustomerPage(StyledWidget):
         # Address validation
         address = row[3].strip()
         if address:
-            if not address or len(address) < 5:
+            if len(address) < 5:
                 errors.append(f"Row {row_number}: Invalid address (must be at least 5 characters)")
 
         return errors, (name, phone, address)
@@ -302,15 +341,16 @@ class RegisterCustomerPage(StyledWidget):
                 self.name_error.setText(error_msg)
             is_valid = False
 
-        # Phone validation: Must be 10 digits and not start with 0
-        phone_regex = r'^[1-9]\d{9}$'  # Ensures first digit is 1-9 and total length is 10
-        if not re.match(phone_regex, phone):
-            error_msg = "Phone number must be 10 digits and cannot start with 0"
-            if is_edit:
-                self.edit_phone_error.setText(error_msg)
-            else:
-                self.phone_error.setText(error_msg)
-            is_valid = False
+        # Phone validation: only validate if provided
+        if phone:  # Only validate if phone is not empty
+            phone_regex = r'^[1-9]\d{9}$'
+            if not re.match(phone_regex, phone):
+                error_msg = "Phone number must be 10 digits and cannot start with 0"
+                if is_edit:
+                    self.edit_phone_error.setText(error_msg)
+                else:
+                    self.phone_error.setText(error_msg)
+                is_valid = False
 
         # Address validation (optional)
         if address and len(address) < 5:
@@ -356,6 +396,10 @@ class RegisterCustomerPage(StyledWidget):
         customers = DatabaseManager.get_all_customers()
         for customer in customers:
             self.customer_dropdown.addItem(f"{customer[1]}", customer[0])
+        
+        # Reset stored customers data whenever we reload
+        if hasattr(self, 'all_customers_data'):
+            delattr(self, 'all_customers_data')
 
     def load_customer_details(self):
         """Loads customer details into the edit form"""

@@ -24,29 +24,29 @@ python main.py
 :: Cleanup script
 echo Performing comprehensive cleanup...
 
-:: Remove specific directories
-if exist "__pycache__" (
-    echo Removing __pycache__ directory...
-    rmdir /s /q "__pycache__"
-)
+@REM :: Remove specific directories
+@REM if exist "__pycache__" (
+@REM     echo Removing __pycache__ directory...
+@REM     rmdir /s /q "__pycache__"
+@REM )
 
-if exist "logs" (
-    echo Removing logs directory...
-    rmdir /s /q "logs"
-)
+@REM if exist "logs" (
+@REM     echo Removing logs directory...
+@REM     rmdir /s /q "logs"
+@REM )
 
-if exist "build" (
-    echo Removing build directory...
-    rmdir /s /q "build"
-)
+@REM if exist "build" (
+@REM     echo Removing build directory...
+@REM     rmdir /s /q "build"
+@REM )
 
-:: Remove all files except specific ones
-for %%F in (*) do (
-    set "keep=0"
-    if "%%~nxF"=="LoanApplication.exe" set "keep=1"
-    if "%%~nxF"=="loanApp.db" set "keep=1"
+@REM :: Remove all files except specific ones
+@REM for %%F in (*) do (
+@REM     set "keep=0"
+@REM     if "%%~nxF"=="LoanApplication.exe" set "keep=1"
+@REM     if "%%~nxF"=="loanApp.db" set "keep=1"
     
-    if !keep!==0 del "%%F"
-)
+@REM     if !keep!==0 del "%%F"
+@REM )
 
-echo Cleanup complete.
+@REM echo Cleanup complete.

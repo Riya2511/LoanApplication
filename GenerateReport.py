@@ -129,6 +129,26 @@ class GenerateReport(StyledWidget):
             }
         """)
         customer_info_layout = QVBoxLayout()
+
+         # Create labels for total loan amount and total amount due (add these)
+        self.total_customer_loan_label = QLabel("Total Loan Amount (₹): 0.00")
+        self.total_customer_due_label = QLabel("Total Amount Due (₹): 0.00")
+        
+        # Apply styling to make them stand out (add these)
+        self.total_customer_loan_label.setStyleSheet("""
+            font-weight: bold; 
+            font-size: 16px; 
+            color: #2196F3;
+        """)
+        self.total_customer_due_label.setStyleSheet("""
+            font-weight: bold; 
+            font-size: 16px; 
+            color: #FF5722;
+        """)
+        
+        customer_info_layout.addWidget(self.total_customer_loan_label)
+        customer_info_layout.addWidget(self.total_customer_due_label)
+
         self.customer_info_group.setLayout(customer_info_layout)
         self.content_layout.addWidget(self.customer_info_group)
 
@@ -342,12 +362,24 @@ class GenerateReport(StyledWidget):
     def populate_customer_info(self):
         """Populate customer information in the customer info group."""
         customer_info_layout = self.customer_info_group.layout()
-        while customer_info_layout.count():
-            child = customer_info_layout.takeAt(0)
+        
+        # Clear existing widgets except the total labels
+        while customer_info_layout.count() > 2:  # Keep first 2 widgets (total labels)
+            child = customer_info_layout.takeAt(2)
             if child.widget():
                 child.widget().deleteLater()
-
+        
         customer_info = DatabaseManager.get_customer_by_id(self.selected_customer_id)
+        
+        # Calculate totals for the selected customer
+        total_loan, total_due = DatabaseManager.get_customer_loan_totals(
+            self.selected_customer_id, self.selected_year)
+        
+        # Update the total labels
+        self.total_customer_loan_label.setText(f"Total Loan Amount (₹): {total_loan:,.2f}")
+        self.total_customer_due_label.setText(f"Total Amount Due (₹): {total_due:,.2f}")
+        
+        # Add the rest of customer info
         if customer_info:
             for key, value in customer_info.items():
                 if key == "customer_id" or not value:

@@ -60,12 +60,12 @@ def add_to_defender_exclusion(executable_path):
 
 def run_pyinstaller():
     try:
-        if not createAuthFile():
-            logging.error('Failed to create auth file. Ensure you are running on a pendrive.')
-            return False
+        # if not createAuthFile():
+        #     logging.error('Failed to create auth file. Ensure you are running on a pendrive.')
+        #     return False
         # command = fr'pyinstaller --onefile --windowed --distpath . --add-data=".auth;.auth" --add-data="{font_file_path};fonts\DejaVuSans.ttf" --name LoanApplication app.py'
         # command = fr'pyinstaller --onefile --windowed --distpath . --add-data="{font_file_path};fonts\DejaVuSans.ttf" --name LoanApplication app.py'
-        command = fr'pyinstaller --onefile --distpath final/ --name LoanApplication app.py'
+        command = fr'pyinstaller --onefile --windowed --distpath final/ --name LoanApplication app.py'
         result = subprocess.run(command, capture_output=True, text=True)
         
         # Log stdout and stderr

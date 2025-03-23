@@ -13,7 +13,7 @@ class DatabaseManager:
                 CREATE TABLE IF NOT EXISTS Customers (
                     customer_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name VARCHAR NOT NULL,
-                    phone VARCHAR UNIQUE,
+                    phone VARCHAR NULL,
                     address TEXT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -778,3 +778,42 @@ class DatabaseManager:
         finally:
             if conn:
                 conn.close()
+
+    @staticmethod
+    def get_customer_loan_totals(customer_id, year=None):
+        """Get total loan amount and total amount due for a specific customer."""
+        conn = DatabaseManager.create_connection()
+        cursor = conn.cursor()
+        
+        try:
+            query_params = [customer_id]
+            
+            # Base query without year filter
+            query = """
+                SELECT 
+                    SUM(l.loan_amount) as total_loan_amount,
+                    SUM(l.loan_amount - COALESCE(
+                        (SELECT SUM(p.payment_amount) FROM LoanPayments p WHERE p.loan_id = l.loan_id), 0
+                    )) as total_amount_due
+                FROM loans l
+                WHERE l.customer_id = ?
+            """
+            
+            # Add year filter if specified
+            if year:
+                query += " AND strftime('%Y', l.loan_date) = ?"
+                query_params.append(str(year))
+                
+            cursor.execute(query, query_params)
+            result = cursor.fetchone()
+            
+            total_loan = float(result[0]) if result[0] else 0
+            total_due = float(result[1]) if result[1] else 0
+            
+            return total_loan, total_due
+            
+        except Exception as e:
+            print(f"Error fetching customer loan totals: {e}")
+            return 0, 0
+        finally:
+            conn.close()

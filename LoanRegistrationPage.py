@@ -164,8 +164,10 @@ class LoanRegistrationPage(StyledWidget):
             if not asset_description:
                 raise ValueError("Asset description cannot be empty.")
 
-            asset_weight = float(self.asset_weight_input.text().strip())
-            if asset_weight <= 0:
+            asset_weight = self.asset_weight_input.text().strip()
+            if not asset_weight: asset_weight = 0
+            asset_weight = float(asset_weight)
+            if asset_weight < 0:
                 raise ValueError("Asset weight must be positive.")
 
             loan_date = self.date_input.date().toString("yyyy-MM-dd")
@@ -449,6 +451,8 @@ class LoanRegistrationPage(StyledWidget):
             loan_amount = self.edit_loan_amount_input.text().strip()
             asset_description = self.edit_asset_description_input.text().strip()
             asset_weight = self.edit_asset_weight_input.text().strip()
+            if not asset_weight: 
+                asset_weight = 0
 
             # Validate inputs
             if not registered_reference_id:
@@ -463,7 +467,7 @@ class LoanRegistrationPage(StyledWidget):
                 raise ValueError("Loan amount must be positive.")
                 
             asset_weight = float(asset_weight)
-            if asset_weight <= 0:
+            if asset_weight < 0:
                 raise ValueError("Asset weight must be positive.")
 
         except ValueError as e:
