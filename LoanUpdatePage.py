@@ -138,10 +138,11 @@ class LoanUpdatePage(StyledWidget):
 
         # Loan Table Section
         self.loan_table = QTableWidget()
-        self.loan_table.setColumnCount(6)
+        self.loan_table.setColumnCount(7)
         self.loan_table.setHorizontalHeaderLabels(
-            ["Loan Date", "Total Assets", "Total Weight (g)", "Total Amount (₹)", "Amount Due (₹)", ""]
+            ["Loan Date", "Registered Reference Id", "Asset Description", "Total Weight (g)", "Total Amount (₹)", "Amount Due (₹)", ""]
         )
+        self.loan_table.setColumnWidth(1, 200)
         self.loan_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.loan_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.loan_table.setSelectionMode(QTableWidget.SingleSelection)
@@ -535,10 +536,11 @@ class LoanUpdatePage(StyledWidget):
             
             # Set table items
             self.loan_table.setItem(row_idx, 0, QTableWidgetItem(formatted_date))
-            self.loan_table.setItem(row_idx, 1, QTableWidgetItem(asset_descriptions or ""))
-            self.loan_table.setItem(row_idx, 2, QTableWidgetItem(f"{float(total_weight):,.2f}" if total_weight else "0.00"))
-            self.loan_table.setItem(row_idx, 3, QTableWidgetItem(f"{float(loan_amount):,.2f}" if loan_amount else "0.00"))
-            self.loan_table.setItem(row_idx, 4, QTableWidgetItem(f"{float(amount_due):,.2f}" if amount_due else "0.00"))
+            self.loan_table.setItem(row_idx, 1, QTableWidgetItem(registered_reference_id))
+            self.loan_table.setItem(row_idx, 2, QTableWidgetItem(asset_descriptions or ""))
+            self.loan_table.setItem(row_idx, 3, QTableWidgetItem(f"{float(total_weight):,.2f}" if total_weight else "0.00"))
+            self.loan_table.setItem(row_idx, 4, QTableWidgetItem(f"{float(loan_amount):,.2f}" if loan_amount else "0.00"))
+            self.loan_table.setItem(row_idx, 5, QTableWidgetItem(f"{float(amount_due):,.2f}" if amount_due else "0.00"))
             
             # Add update button
             update_button = QPushButton("Repay Amount")
