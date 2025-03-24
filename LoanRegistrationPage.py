@@ -334,10 +334,47 @@ class LoanRegistrationPage(StyledWidget):
             self.loans_table.setRowCount(0)
             return
             
-        # Filter loans based on reference ID
+        # Filter loans based on text in any displayed column
         if filter_text:
-            filtered_loans = [loan for loan in self.all_loans 
-                              if loan[6] and filter_text in loan[6].lower()]
+            filtered_loans = []
+            for loan in self.all_loans:
+                # Create searchable strings for each column
+                date_str = loan[0]
+                if " 00:00:00" in date_str:
+                    date_str = date_str.split(" ")[0]
+                    
+                # Format date for searching
+                try:
+                    date_parts = date_str.split('-')
+                    if len(date_parts) == 3:
+                        formatted_date = f"{date_parts[2]}-{date_parts[1]}-{date_parts[0]}"
+                    else:
+                        formatted_date = date_str
+                except:
+                    formatted_date = date_str
+                
+                ref_id = loan[6] or "N/A"
+                assets = loan[1] or "N/A"
+                total_weight = f"{loan[2]:.2f}"
+                loan_amount = f"{loan[3]:.2f}"
+                amount_due = f"{loan[4]:.2f}"
+                interest_paid = f"{loan[5]:.2f}"
+                status = "Completed" if float(loan[4]) <= 0 else "Pending"
+                
+                # Check if filter text is in any of the columns
+                searchable_values = [
+                    formatted_date.lower(),
+                    ref_id.lower(),
+                    assets.lower(),
+                    total_weight,
+                    loan_amount,
+                    amount_due,
+                    interest_paid,
+                    status.lower()
+                ]
+                
+                if any(filter_text in value for value in searchable_values):
+                    filtered_loans.append(loan)
         else:
             filtered_loans = self.all_loans
             

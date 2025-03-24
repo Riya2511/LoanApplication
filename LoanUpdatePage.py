@@ -716,10 +716,47 @@ class LoanUpdatePage(StyledWidget):
         # Filter loans based on search text
         filtered_loans = []
         for loan_data in self.all_loans_data:
-            # Check if reference ID contains the search text
-            reference_id = str(loan_data[6]).lower()  # Index 6 is registered_reference_id
+            # Convert all loan data to strings for searching
+            searchable_values = []
             
-            if search_text in reference_id:
+            # Add all relevant fields to searchable values
+            # Assuming loan_data structure based on previous code:
+            # [date, assets, total_weight, loan_amount, amount_due, interest_paid, registered_reference_id, loan_id, ...]
+            
+            # Date (index 0)
+            date_str = str(loan_data[0]).lower()
+            searchable_values.append(date_str)
+            
+            # Assets (index 1)
+            assets = str(loan_data[1] or "N/A").lower()
+            searchable_values.append(assets)
+            
+            # Total Weight (index 2)
+            total_weight = str(loan_data[2]).lower()
+            searchable_values.append(total_weight)
+            
+            # Loan Amount (index 3)
+            loan_amount = str(loan_data[3]).lower()
+            searchable_values.append(loan_amount)
+            
+            # Amount Due (index 4)
+            amount_due = str(loan_data[4]).lower()
+            searchable_values.append(amount_due)
+            
+            # Interest Paid (index 5)
+            interest_paid = str(loan_data[5]).lower()
+            searchable_values.append(interest_paid)
+            
+            # Registered Reference ID (index 6)
+            reference_id = str(loan_data[6] or "N/A").lower()
+            searchable_values.append(reference_id)
+            
+            # Status (derived from amount_due)
+            status = "completed" if float(loan_data[4]) <= 0 else "pending"
+            searchable_values.append(status)
+            
+            # Check if search text is in any of the searchable values
+            if any(search_text in value for value in searchable_values):
                 filtered_loans.append(loan_data)
         
         # Display filtered loans
