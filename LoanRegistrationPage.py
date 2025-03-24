@@ -56,6 +56,9 @@ class LoanRegistrationPage(StyledWidget):
         self.content_layout.addLayout(customer_layout)
 
         self.customer_info_group = QGroupBox("Customer Information")
+        # In the init_ui method, after creating the customer_info_group:
+        self.customer_info_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        self.customer_info_group.setMinimumHeight(100)  # Set an appropriate minimum height
         self.customer_info_group.setStyleSheet("""
             QGroupBox {
                 border: 1px solid #d3d3d3;
@@ -292,7 +295,7 @@ class LoanRegistrationPage(StyledWidget):
         # Clean up existing edit section if it exists
         self.remove_edit_section()
         
-        if index <= 0:  # If "Select Customer" is chosen
+        if index < 0:  # If "Select Customer" is chosen
             self.selected_customer_id = None
             self.loan_form_group.setEnabled(False)
             self.update_customer_info()
@@ -483,9 +486,12 @@ class LoanRegistrationPage(StyledWidget):
             child = layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
-
+                
         if not self.selected_customer_id:
-            # If no customer is selected, don't display anything
+            # Add a placeholder label when no customer is selected
+            placeholder = QLabel("No customer selected")
+            placeholder.setAlignment(Qt.AlignCenter)
+            layout.addWidget(placeholder)
             return
 
         customer = DatabaseManager.get_customer_by_id(self.selected_customer_id)
@@ -678,8 +684,8 @@ class LoanRegistrationPage(StyledWidget):
         
         # If there's exactly one match, select that customer
         if len(matching_customers) == 1:
-            self.customer_dropdown.setCurrentIndex(1)  # First item after "Select Customer"
-            # self.on_customer_selected(1)
+            self.customer_dropdown.setCurrentIndex(0)  # First item after "Select Customer"
+            self.on_customer_selected(0)
             
     def create_info_label(self, text):
         """Helper method to create consistently styled labels for customer info"""

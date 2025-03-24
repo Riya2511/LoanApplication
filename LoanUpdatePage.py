@@ -698,7 +698,8 @@ class LoanUpdatePage(StyledWidget):
         
         # If there's exactly one match, select that customer
         if len(matching_customers) == 1:
-            self.customer_dropdown.setCurrentIndex(1)  # Index 1 because index 0 is the placeholder
+            self.customer_dropdown.setCurrentIndex(0)  # Index 1 because index 0 is the placeholder
+            self.on_customer_selected(0)
         else:
             # Otherwise select the placeholder
             self.customer_dropdown.setCurrentIndex(0)
