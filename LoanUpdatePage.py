@@ -145,7 +145,7 @@ class LoanUpdatePage(StyledWidget):
         self.content_layout.addLayout(customer_layout)
 
         # Add a placeholder item
-        self.customer_dropdown.addItem("Select a customer", None)
+        # self.customer_dropdown.addItem("Select a customer", None)
 
         # Customer Information Group Box
         self.customer_info_group = QGroupBox("Customer Information")
@@ -529,7 +529,7 @@ class LoanUpdatePage(StyledWidget):
         self.all_customers_data = []  # Clear existing data
         
         # Add the initial placeholder
-        self.customer_dropdown.addItem("Select a customer", None)
+        # self.customer_dropdown.addItem("Select a customer", None)
         
         customers = DatabaseManager.get_all_customers()
         if customers:
@@ -684,7 +684,7 @@ class LoanUpdatePage(StyledWidget):
         self.customer_dropdown.clear()
         
         # Always add the placeholder
-        self.customer_dropdown.addItem("Select a customer", None)
+        # self.customer_dropdown.addItem("Select a customer", None)
 
         # Add matching customers
         matching_customers = []

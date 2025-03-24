@@ -271,7 +271,7 @@ class LoanRegistrationPage(StyledWidget):
 
     def populate_customer_dropdown(self):
         self.customer_dropdown.clear()
-        self.customer_dropdown.addItem("Select Customer", None)  # Add default option
+        # self.customer_dropdown.addItem("Select Customer", None)  # Add default option
         
         # Initialize customer data list
         self.all_customers_data = []
@@ -664,7 +664,7 @@ class LoanRegistrationPage(StyledWidget):
 
         self.customer_dropdown.blockSignals(True)
         self.customer_dropdown.clear()
-        self.customer_dropdown.addItem("Select Customer", None)  # Keep the default option
+        # self.customer_dropdown.addItem("Select Customer", None)  # Keep the default option
 
         # Add matching customers
         matching_customers = []
