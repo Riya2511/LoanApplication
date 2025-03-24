@@ -1,0 +1,226 @@
+{
+    "extension": "linecounter",
+    "version": "0.2.7",
+    "workspace": "c:\\Test\\LoanApplication",
+    "linecount": [
+        {
+            "version": "0.2.7",
+            "counttime": "2025-03-24 14:44:46",
+            "filesum": 29,
+            "codesum": 2495,
+            "commentsum": 457,
+            "blanksum": 677,
+            "statistics": {
+                ".py": {
+                    "code": 2456,
+                    "comment": 449,
+                    "blank": 665
+                },
+                "": {
+                    "code": 3,
+                    "comment": 0,
+                    "blank": 0
+                },
+                ".csv": {
+                    "code": 2,
+                    "comment": 0,
+                    "blank": 0
+                },
+                ".bat": {
+                    "code": 34,
+                    "comment": 8,
+                    "blank": 12
+                }
+            },
+            "filelist": [
+                {
+                    "blank": 0,
+                    "code": 3,
+                    "comment": 0,
+                    "filename": ".gitignore"
+                },
+                {
+                    "filename": "__pycache__\\binary_images.cpython-312.pyc",
+                    "isbinaryfile": true,
+                    "blank": 0,
+                    "code": 0,
+                    "comment": 0
+                },
+                {
+                    "filename": "__pycache__\\DatabaseManager.cpython-312.pyc",
+                    "isbinaryfile": true,
+                    "blank": 0,
+                    "code": 0,
+                    "comment": 0
+                },
+                {
+                    "filename": "__pycache__\\GenerateReport.cpython-312.pyc",
+                    "isbinaryfile": true,
+                    "blank": 0,
+                    "code": 0,
+                    "comment": 0
+                },
+                {
+                    "filename": "__pycache__\\helper.cpython-312.pyc",
+                    "isbinaryfile": true,
+                    "blank": 0,
+                    "code": 0,
+                    "comment": 0
+                },
+                {
+                    "filename": "__pycache__\\HomePage.cpython-312.pyc",
+                    "isbinaryfile": true,
+                    "blank": 0,
+                    "code": 0,
+                    "comment": 0
+                },
+                {
+                    "filename": "__pycache__\\initial_setup.cpython-312.pyc",
+                    "isbinaryfile": true,
+                    "blank": 0,
+                    "code": 0,
+                    "comment": 0
+                },
+                {
+                    "filename": "__pycache__\\LoanRegistrationPage.cpython-312.pyc",
+                    "isbinaryfile": true,
+                    "blank": 0,
+                    "code": 0,
+                    "comment": 0
+                },
+                {
+                    "filename": "__pycache__\\LoanUpdatePage.cpython-312.pyc",
+                    "isbinaryfile": true,
+                    "blank": 0,
+                    "code": 0,
+                    "comment": 0
+                },
+                {
+                    "filename": "__pycache__\\LoginScreen.cpython-312.pyc",
+                    "isbinaryfile": true,
+                    "blank": 0,
+                    "code": 0,
+                    "comment": 0
+                },
+                {
+                    "filename": "__pycache__\\RegisterCustomerPage.cpython-312.pyc",
+                    "isbinaryfile": true,
+                    "blank": 0,
+                    "code": 0,
+                    "comment": 0
+                },
+                {
+                    "filename": "__pycache__\\terms_dialog.cpython-312.pyc",
+                    "isbinaryfile": true,
+                    "blank": 0,
+                    "code": 0,
+                    "comment": 0
+                },
+                {
+                    "blank": 23,
+                    "code": 116,
+                    "comment": 30,
+                    "filename": "app.py"
+                },
+                {
+                    "blank": 3,
+                    "code": 2,
+                    "comment": 1,
+                    "filename": "binary_images.py"
+                },
+                {
+                    "blank": 123,
+                    "code": 441,
+                    "comment": 88,
+                    "filename": "DatabaseManager.py"
+                },
+                {
+                    "blank": 107,
+                    "code": 389,
+                    "comment": 66,
+                    "filename": "GenerateReport.py"
+                },
+                {
+                    "blank": 20,
+                    "code": 81,
+                    "comment": 16,
+                    "filename": "helper.py"
+                },
+                {
+                    "blank": 10,
+                    "code": 38,
+                    "comment": 1,
+                    "filename": "HomePage.py"
+                },
+                {
+                    "blank": 9,
+                    "code": 53,
+                    "comment": 1,
+                    "filename": "initial_setup.py"
+                },
+                {
+                    "filename": "loanApp.db",
+                    "isbinaryfile": true,
+                    "blank": 0,
+                    "code": 0,
+                    "comment": 0
+                },
+                {
+                    "blank": 100,
+                    "code": 386,
+                    "comment": 68,
+                    "filename": "LoanRegistrationPage.py"
+                },
+                {
+                    "blank": 128,
+                    "code": 460,
+                    "comment": 103,
+                    "filename": "LoanUpdatePage.py"
+                },
+                {
+                    "blank": 24,
+                    "code": 86,
+                    "comment": 16,
+                    "filename": "LoginScreen.py"
+                },
+                {
+                    "blank": 16,
+                    "code": 77,
+                    "comment": 14,
+                    "filename": "main.py"
+                },
+                {
+                    "blank": 92,
+                    "code": 300,
+                    "comment": 39,
+                    "filename": "RegisterCustomerPage.py"
+                },
+                {
+                    "filename": "requirements.txt",
+                    "isbinaryfile": true,
+                    "blank": 0,
+                    "code": 0,
+                    "comment": 0
+                },
+                {
+                    "blank": 12,
+                    "code": 34,
+                    "comment": 8,
+                    "filename": "setup.bat"
+                },
+                {
+                    "blank": 10,
+                    "code": 27,
+                    "comment": 6,
+                    "filename": "terms_dialog.py"
+                },
+                {
+                    "blank": 0,
+                    "code": 2,
+                    "comment": 0,
+                    "filename": "test.csv"
+                }
+            ]
+        }
+    ]
+}

@@ -15,6 +15,7 @@ class LoanRegistrationPage(StyledWidget):
         self.customer_info_group = None
         self.asset_entries = []
         self.edit_loan_group = None  # Add this to track the edit loan group
+        self.all_loans = []  # To store all loans for filtering
         self.init_ui()
 
     def init_ui(self):
@@ -24,6 +25,13 @@ class LoanRegistrationPage(StyledWidget):
         # Add a search box
         self.search_box = QLineEdit()
         self.search_box.setPlaceholderText("Search customers...")
+        self.search_box.setStyleSheet("""
+            QLineEdit {
+                font-size: 16px;
+                padding: 5px;
+                min-height: 30px;
+            }
+        """)
         self.search_box.setFixedWidth(300)
         self.search_box.textChanged.connect(self.filter_customers)
         customer_layout.addWidget(self.search_box, alignment=Qt.AlignRight)
@@ -128,6 +136,24 @@ class LoanRegistrationPage(StyledWidget):
 
         self.loans_group = QGroupBox("Customer Loans")
         loans_layout = QVBoxLayout()
+        
+        # Add loan filter for Registered Reference ID
+        filter_layout = QHBoxLayout()
+        self.loan_filter = QLineEdit()
+        self.loan_filter.setPlaceholderText("Filter by Registered Reference ID...")
+        self.loan_filter.setStyleSheet("""
+            QLineEdit {
+                font-size: 14px;
+                padding: 5px;
+                min-height: 28px;
+                max-width: 300px;
+            }
+        """)
+        self.loan_filter.textChanged.connect(self.filter_loans)
+        filter_layout.addWidget(QLabel("Search Loans:"))
+        filter_layout.addWidget(self.loan_filter)
+        filter_layout.addStretch()
+        loans_layout.addLayout(filter_layout)
         
         self.loans_table = QTableWidget()
         self.loans_table.setColumnCount(10)  # Increased to 10 for Registered Reference Id and Delete Loan columns
@@ -291,13 +317,34 @@ class LoanRegistrationPage(StyledWidget):
     def update_loans_table(self):
         if not self.selected_customer_id:
             self.loans_table.setRowCount(0)
+            self.all_loans = []  # Clear stored loans
             return
             
         loans = DatabaseManager.fetch_loans_for_customer(self.selected_customer_id)
         loans = sorted(loans, key=lambda loan: loan[0], reverse=True)
-        self.loans_table.setRowCount(len(loans))
+        self.all_loans = loans  # Store all loans for filtering
+        
+        # Apply filter if there is text in the filter box
+        self.filter_loans()
 
-        for row, loan in enumerate(loans):
+    def filter_loans(self):
+        filter_text = self.loan_filter.text().strip().lower()
+        
+        if not self.all_loans:
+            self.loans_table.setRowCount(0)
+            return
+            
+        # Filter loans based on reference ID
+        if filter_text:
+            filtered_loans = [loan for loan in self.all_loans 
+                              if loan[6] and filter_text in loan[6].lower()]
+        else:
+            filtered_loans = self.all_loans
+            
+        # Update table with filtered loans
+        self.loans_table.setRowCount(len(filtered_loans))
+        
+        for row, loan in enumerate(filtered_loans):
             # Handle date formatting correctly
             date_str = loan[0]
             if " 00:00:00" in date_str:
@@ -410,8 +457,11 @@ class LoanRegistrationPage(StyledWidget):
                 if key == "customer_id" or not value:
                     continue
                 row = QHBoxLayout()
-                row.addWidget(QLabel(f"{key.replace('_', ' ').title()}:"))
-                row.addWidget(QLabel(str(value)))
+                # Create labels with consistent styling using the helper method
+                key_label = self.create_info_label(f"{key.replace('_', ' ').title()}:")
+                value_label = self.create_info_label(str(value))
+                row.addWidget(key_label)
+                row.addWidget(value_label)
                 layout.addLayout(row)
         else:
             QMessageBox.warning(self, "Error", "Failed to load customer details.")
@@ -593,3 +643,14 @@ class LoanRegistrationPage(StyledWidget):
         if len(matching_customers) == 1:
             self.customer_dropdown.setCurrentIndex(1)  # First item after "Select Customer"
             # self.on_customer_selected(1)
+            
+    def create_info_label(self, text):
+        """Helper method to create consistently styled labels for customer info"""
+        label = QLabel(text)
+        label.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                padding: 3px;
+            }
+        """)
+        return label

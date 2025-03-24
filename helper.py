@@ -19,6 +19,7 @@ class StyledWidget(QWidget):
             QWidget {
                 background-color: #f4f4f4;
                 font-family: Arial, sans-serif;
+                font-size: 14px;  /* Base font size for all widgets */
             }
             QPushButton {
                 background-color: #3498db;
@@ -26,6 +27,7 @@ class StyledWidget(QWidget):
                 border-radius: 5px;
                 padding: 8px;
                 font-weight: bold;
+                font-size: 14px;  /* Explicit size for buttons */
             }
             QPushButton:hover {
                 background-color: #2980b9;
@@ -34,17 +36,46 @@ class StyledWidget(QWidget):
                 font-size: 16px;
                 color: #2c3e50;
             }
-            QLineEdit, QComboBox {
+            QLineEdit, QComboBox, QComboBox QAbstractItemView {
                 padding: 8px;
                 border: 1px solid #bdc3c7;
                 border-radius: 4px;
+                font-size: 14px;  /* Explicit size for input elements */
             }
             QLabel.error {
                 color: red;
+                font-size: 14px;  /* Change error labels too */
+            }
+            /* Add these additional selectors to catch more elements */
+            QHeaderView::section {
                 font-size: 14px;
             }
+            QTableView {
+                font-size: 14px;
+            }
+            QCheckBox, QRadioButton {
+                font-size: 14px;
+            }
+            QMenu, QMenuBar {
+                font-size: 14px;
+            }
+            QTabBar::tab {
+                font-size: 14px;
+            }
+            /* Style for info sections (customer info, etc.) */
+            QGroupBox QLabel {
+                font-size: 16px;
+            }
+            /* For labels within HBox layouts (typically used for displaying info) */
+            QHBoxLayout > QLabel {
+                font-size: 16px;
+            }
+            /* Ensure all information display labels have consistent sizing */
+            .info-label {
+                font-size: 16px;
+            }
         """)
-        
+
         # Main layout
         main_layout = QVBoxLayout()
         self.setLayout(main_layout)
@@ -87,6 +118,13 @@ class StyledWidget(QWidget):
         # Always go to HomePage (index 1)
         if self.switch_page_callback:
             self.switch_page_callback(1)
+    
+    def create_info_label(self, text):
+        """Helper method to create consistently styled information labels"""
+        label = QLabel(text)
+        label.setStyleSheet("font-size: 16px;")
+        label.setProperty("class", "info-label")
+        return label
 
 def hashSerialNumber(serialNumber: str):
     dataEncoded = str(serialNumber).encode("utf-8")
@@ -136,5 +174,3 @@ def verifyPendrive():
     except Exception as e:
         print(f"Error verifying pendrive: {e}")
         return False
-
- 

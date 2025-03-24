@@ -356,6 +356,8 @@ class GenerateReport(StyledWidget):
         if filtered_customers:
             for customer_id, name, account_number in filtered_customers:
                 self.customer_dropdown.addItem(f"{name} - {account_number}" if account_number else f"{name}", customer_id)
+            if len(filtered_customers) == 1:
+                self.customer_dropdown.setCurrentIndex(1)  # First item after "Select Customer"
 
     def on_customer_selected(self, index):
         """Display customer information and loans when a customer is selected."""

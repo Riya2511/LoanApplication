@@ -1,0 +1,49 @@
+===============================================================================
+EXTENSION NAME : linecounter
+EXTENSION VERSION : 0.2.7
+-------------------------------------------------------------------------------
+count time : 2025-03-24 14:44:46
+count workspace : c:\Test\LoanApplication
+total files : 29
+total code lines : 2495
+total comment lines : 457
+total blank lines : 677
+
+    statistics
+   |      extension|     total code|  total comment|    total blank|percent|
+   -------------------------------------------------------------------------
+   |            .py|           2456|            449|            665|     98|
+   |               |              3|              0|              0|   0.12|
+   |           .csv|              2|              0|              0|  0.080|
+   |           .bat|             34|              8|             12|    1.4|
+   -------------------------------------------------------------------------
+.gitignore, code is 3, comment is 0, blank is 0.
+__pycache__\binary_images.cpython-312.pyc, it is a binary file.
+__pycache__\DatabaseManager.cpython-312.pyc, it is a binary file.
+__pycache__\GenerateReport.cpython-312.pyc, it is a binary file.
+__pycache__\helper.cpython-312.pyc, it is a binary file.
+__pycache__\HomePage.cpython-312.pyc, it is a binary file.
+__pycache__\initial_setup.cpython-312.pyc, it is a binary file.
+__pycache__\LoanRegistrationPage.cpython-312.pyc, it is a binary file.
+__pycache__\LoanUpdatePage.cpython-312.pyc, it is a binary file.
+__pycache__\LoginScreen.cpython-312.pyc, it is a binary file.
+__pycache__\RegisterCustomerPage.cpython-312.pyc, it is a binary file.
+__pycache__\terms_dialog.cpython-312.pyc, it is a binary file.
+app.py, code is 116, comment is 30, blank is 23.
+binary_images.py, code is 2, comment is 1, blank is 3.
+DatabaseManager.py, code is 441, comment is 88, blank is 123.
+GenerateReport.py, code is 389, comment is 66, blank is 107.
+helper.py, code is 81, comment is 16, blank is 20.
+HomePage.py, code is 38, comment is 1, blank is 10.
+initial_setup.py, code is 53, comment is 1, blank is 9.
+loanApp.db, it is a binary file.
+LoanRegistrationPage.py, code is 386, comment is 68, blank is 100.
+LoanUpdatePage.py, code is 460, comment is 103, blank is 128.
+LoginScreen.py, code is 86, comment is 16, blank is 24.
+main.py, code is 77, comment is 14, blank is 16.
+RegisterCustomerPage.py, code is 300, comment is 39, blank is 92.
+requirements.txt, it is a binary file.
+setup.bat, code is 34, comment is 8, blank is 12.
+terms_dialog.py, code is 27, comment is 6, blank is 10.
+test.csv, code is 2, comment is 0, blank is 0.
+===============================================================================

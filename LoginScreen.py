@@ -60,9 +60,9 @@ class ChangePasswordDialog(QDialog):
 
 
 class LoginScreen(QWidget):
-    def __init__(self, switch_page_callback):
+    def __init__(self, on_login_callback):
         super().__init__()
-        self.switch_page_callback = switch_page_callback
+        self.on_login_callback = on_login_callback  # Change to store the callback with new name
         self.init_ui()
 
     def init_ui(self):
@@ -111,7 +111,8 @@ class LoginScreen(QWidget):
     def verify_password(self):
         password = self.password_input.text()
         if DatabaseManager.verify_password(password):
-            self.switch_page_callback(1)  # Assuming HomePage is at index 1
+            # Call the login success callback instead of directly switching pages
+            self.on_login_callback()  # No need to pass user_id if you're not tracking specific users
         else:
             QMessageBox.warning(self, "Error", "Incorrect password!")
 

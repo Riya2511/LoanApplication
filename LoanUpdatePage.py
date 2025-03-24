@@ -102,7 +102,8 @@ class LoanUpdatePage(StyledWidget):
         self.update_group = None
         self.assets_table = None
         self.repayment_table = None
-        self.all_customers_data = []  # Add this line
+        self.all_customers_data = []
+        self.all_loans_data = []  # Added to store all loans for filtering
         self.init_ui()
         
         # Hide tables initially
@@ -111,12 +112,19 @@ class LoanUpdatePage(StyledWidget):
 
     def init_ui(self):
         # Customer Selection Section
-        customer_layout = QVBoxLayout()  # Change to QVBoxLayout
+        customer_layout = QVBoxLayout()
 
         # Add search box
         self.customer_search = QLineEdit()
         self.customer_search.setPlaceholderText("Search customers...")
         self.customer_search.setFixedWidth(300)
+        self.customer_search.setStyleSheet("""
+            QLineEdit {
+                font-size: 16px;
+                padding: 5px;
+                min-height: 30px;
+            }
+        """)
         self.customer_search.textChanged.connect(self.filter_customers)
         customer_layout.addWidget(self.customer_search, alignment=Qt.AlignCenter)
 
@@ -154,6 +162,30 @@ class LoanUpdatePage(StyledWidget):
         customer_info_layout = QVBoxLayout()
         self.customer_info_group.setLayout(customer_info_layout)
         self.content_layout.addWidget(self.customer_info_group)
+
+        # Add Loan Search Box
+        self.loan_search_layout = QHBoxLayout()
+        loan_search_label = QLabel("Search Loans:")
+        self.loan_search = QLineEdit()
+        self.loan_search.setPlaceholderText("Search by reference ID...")
+        self.loan_search.setStyleSheet("""
+            QLineEdit {
+                font-size: 14px;
+                padding: 4px;
+                min-height: 25px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+            }
+        """)
+        self.loan_search.textChanged.connect(self.filter_loans)
+        self.loan_search_layout.addWidget(loan_search_label)
+        self.loan_search_layout.addWidget(self.loan_search)
+        self.loan_search_layout.addStretch()
+        self.content_layout.addLayout(self.loan_search_layout)
+        for i in range(self.loan_search_layout.count()):
+            widget = self.loan_search_layout.itemAt(i).widget()
+            if widget:
+                widget.setVisible(False)
 
         # Loan Table Section
         self.loan_table = QTableWidget()
@@ -482,6 +514,13 @@ class LoanUpdatePage(StyledWidget):
             self.loan_table.setVisible(False)
             self.customer_info_group.setVisible(False)
             self.update_group.setVisible(False)
+            
+            # Hide loan search layout
+            for i in range(self.loan_search_layout.count()):
+                widget = self.loan_search_layout.itemAt(i).widget()
+                if widget:
+                    widget.setVisible(False)
+                    
         super().showEvent(event)
 
     def populate_customer_dropdown(self):
@@ -510,10 +549,19 @@ class LoanUpdatePage(StyledWidget):
         # Get the customer_id from the current selection
         self.selected_customer_id = self.customer_dropdown.currentData()
         
+        # Clear the loan search field
+        self.loan_search.clear()
+        
         # Show/hide elements based on selection
         has_selection = self.selected_customer_id is not None
         self.loan_table.setVisible(has_selection)
         self.customer_info_group.setVisible(has_selection)
+        
+        # Show/hide loan search layout
+        for i in range(self.loan_search_layout.count()):
+            widget = self.loan_search_layout.itemAt(i).widget()
+            if widget:
+                widget.setVisible(has_selection)
         
         # Clear tables if no selection
         if not has_selection:
@@ -555,44 +603,18 @@ class LoanUpdatePage(StyledWidget):
         
         if not loans:
             return
-        loans = sorted(loans, key=lambda loan: loan[0], reverse=True)
-        for row_idx, loan_data in enumerate(loans):
-            self.loan_table.insertRow(row_idx)
             
-            # Unpack loan data
-            (loan_date, asset_descriptions, total_weight, loan_amount, 
-            amount_due, interest_amount, registered_reference_id, loan_id, _) = loan_data
-            
-            # Parse the date format "2022-09-21-09-21 00:00:00"
-            loan_date_str = loan_date
-            try:
-                # Split by spaces to separate date and time
-                date_part = loan_date_str.split()[0]
-                # Split the date part by hyphens
-                date_parts = date_part.split('-')
-                # Get year, month, day
-                if len(date_parts) >= 3:
-                    year = date_parts[0]
-                    month = date_parts[1]
-                    day = date_parts[2]
-                    formatted_date = f"{day}-{month}-{year}"  # "21-09-2022"
-                else:
-                    formatted_date = loan_date_str  # Fallback to original if can't parse
-            except Exception:
-                formatted_date = loan_date_str  # Fallback to original if error
-            
-            # Set table items
-            self.loan_table.setItem(row_idx, 0, QTableWidgetItem(formatted_date))
-            self.loan_table.setItem(row_idx, 1, QTableWidgetItem(registered_reference_id))
-            self.loan_table.setItem(row_idx, 2, QTableWidgetItem(asset_descriptions or ""))
-            self.loan_table.setItem(row_idx, 3, QTableWidgetItem(f"{float(total_weight):,.2f}" if total_weight else "0.00"))
-            self.loan_table.setItem(row_idx, 4, QTableWidgetItem(f"{float(loan_amount):,.2f}" if loan_amount else "0.00"))
-            self.loan_table.setItem(row_idx, 5, QTableWidgetItem(f"{float(amount_due):,.2f}" if amount_due else "0.00"))
-            
-            # Add update button
-            update_button = QPushButton("Repay Amount")
-            update_button.clicked.connect(lambda checked, lid=loan_id: self.show_update_section(lid))
-            self.loan_table.setCellWidget(row_idx, 6, update_button)
+        # Store all loans for filtering
+        self.all_loans_data = sorted(loans, key=lambda loan: loan[0], reverse=True)
+        
+        # Check if there's a search filter active
+        search_text = self.loan_search.text().strip().lower()
+        if search_text:
+            # Apply the filter if there's search text
+            self.filter_loans()
+        else:
+            # Display all loans if no filter
+            self.display_loans(self.all_loans_data)
 
     def show_update_section(self, loan_id):
         """Show the update section with loan details and assets."""
@@ -680,4 +702,65 @@ class LoanUpdatePage(StyledWidget):
         else:
             # Otherwise select the placeholder
             self.customer_dropdown.setCurrentIndex(0)
+    
+    def filter_loans(self):
+        """Filter the loans table based on the search text"""
+        search_text = self.loan_search.text().strip().lower()
         
+        if not self.all_loans_data:
+            return
+            
+        # Clear the table
+        self.loan_table.setRowCount(0)
+        
+        # Filter loans based on search text
+        filtered_loans = []
+        for loan_data in self.all_loans_data:
+            # Check if reference ID contains the search text
+            reference_id = str(loan_data[6]).lower()  # Index 6 is registered_reference_id
+            
+            if search_text in reference_id:
+                filtered_loans.append(loan_data)
+        
+        # Display filtered loans
+        self.display_loans(filtered_loans)
+
+    def display_loans(self, loans): 
+        """Display the given loans in the loan table"""
+        for row_idx, loan_data in enumerate(loans):
+            self.loan_table.insertRow(row_idx)
+            
+            # Unpack loan data
+            (loan_date, asset_descriptions, total_weight, loan_amount, 
+            amount_due, interest_amount, registered_reference_id, loan_id, _) = loan_data
+            
+            # Parse the date format "2022-09-21-09-21 00:00:00"
+            loan_date_str = loan_date
+            try:
+                # Split by spaces to separate date and time
+                date_part = loan_date_str.split()[0]
+                # Split the date part by hyphens
+                date_parts = date_part.split('-')
+                # Get year, month, day
+                if len(date_parts) >= 3:
+                    year = date_parts[0]
+                    month = date_parts[1]
+                    day = date_parts[2]
+                    formatted_date = f"{day}-{month}-{year}"  # "21-09-2022"
+                else:
+                    formatted_date = loan_date_str  # Fallback to original if can't parse
+            except Exception:
+                formatted_date = loan_date_str  # Fallback to original if error
+            
+            # Set table items
+            self.loan_table.setItem(row_idx, 0, QTableWidgetItem(formatted_date))
+            self.loan_table.setItem(row_idx, 1, QTableWidgetItem(registered_reference_id))
+            self.loan_table.setItem(row_idx, 2, QTableWidgetItem(asset_descriptions or ""))
+            self.loan_table.setItem(row_idx, 3, QTableWidgetItem(f"{float(total_weight):,.2f}" if total_weight else "0.00"))
+            self.loan_table.setItem(row_idx, 4, QTableWidgetItem(f"{float(loan_amount):,.2f}" if loan_amount else "0.00"))
+            self.loan_table.setItem(row_idx, 5, QTableWidgetItem(f"{float(amount_due):,.2f}" if amount_due else "0.00"))
+            
+            # Add update button
+            update_button = QPushButton("Repay Amount")
+            update_button.clicked.connect(lambda checked, lid=loan_id: self.show_update_section(lid))
+            self.loan_table.setCellWidget(row_idx, 6, update_button)
