@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (
     QPushButton, QLabel, QGroupBox, QMessageBox, QComboBox, 
     QLineEdit, QFormLayout
 )
-from helper import StyledWidget
+from helper import StyledWidget, format_indian_currency
 from DatabaseManager import DatabaseManager
 from fpdf import FPDF
 from datetime import datetime
@@ -47,6 +47,9 @@ class GenerateReport(StyledWidget):
         # Add years to dropdown (last 10 years)
         self.year_dropdown.addItem("All Years", None)
         for year in range(current_year, current_year - 10, -1):
+            self.year_dropdown.addItem(str(year), year)
+        
+        for year in range(current_year+1, current_year+5): 
             self.year_dropdown.addItem(str(year), year)
         
         year_layout.addWidget(QLabel("Select Year:"))
@@ -177,6 +180,13 @@ class GenerateReport(StyledWidget):
             "Total Amount (₹)", "Amount Due (₹)", ""
         ])
         self.loan_details_table.setColumnWidth(1, 200)
+        self.loan_details_table.setColumnWidth(2, 150)
+        self.loan_details_table.setColumnWidth(3, 150)
+        self.loan_details_table.setColumnWidth(4, 150)
+        self.loan_details_table.setColumnWidth(5, 150)
+        self.loan_details_table.setColumnWidth(6, 150)
+
+
         self.loan_details_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.loan_details_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.loan_details_table.setSelectionMode(QTableWidget.SingleSelection)
@@ -267,7 +277,7 @@ class GenerateReport(StyledWidget):
 
         # Update the labels
         self.total_customers_label.setText(f"Total Customers: {total_customers}")
-        self.total_loan_due_label.setText(f"Total Loan Amount Due (₹): {total_loan_due:,.2f}")
+        self.total_loan_due_label.setText(f"Total Loan Amount Due (₹): {format_indian_currency(total_loan_due)}")
 
     def populate_assets_table(self, loan_id):
         """Populate assets table with loan assets."""
@@ -294,9 +304,9 @@ class GenerateReport(StyledWidget):
                 
                 self.loan_payments_table.setItem(row_idx, 0, QTableWidgetItem(formatted_date))
                 self.loan_payments_table.setItem(row_idx, 1, QTableWidgetItem(repayment.get("asset_description", "")))
-                self.loan_payments_table.setItem(row_idx, 2, QTableWidgetItem(f"{float(repayment['payment_amount']):,.2f}"))
-                self.loan_payments_table.setItem(row_idx, 3, QTableWidgetItem(f"{float(repayment['interest_amount']):,.2f}"))
-                self.loan_payments_table.setItem(row_idx, 4, QTableWidgetItem(f"{float(repayment['amount_left']):,.2f}"))
+                self.loan_payments_table.setItem(row_idx, 2, QTableWidgetItem(f"{format_indian_currency(float(repayment['payment_amount']))}"))
+                self.loan_payments_table.setItem(row_idx, 3, QTableWidgetItem(f"{format_indian_currency(float(repayment['interest_amount']))}"))
+                self.loan_payments_table.setItem(row_idx, 4, QTableWidgetItem(f"{format_indian_currency(float(repayment['amount_left']))}"))
         else:
             self.loan_payments_table.insertRow(0)
             self.loan_payments_table.setItem(0, 0, QTableWidgetItem("No payments made"))
@@ -396,8 +406,8 @@ class GenerateReport(StyledWidget):
             self.selected_customer_id, self.selected_year)
         
         # Update the total labels
-        self.total_customer_loan_label.setText(f"Total Loan Amount (₹): {total_loan:,.2f}")
-        self.total_customer_due_label.setText(f"Total Amount Due (₹): {total_due:,.2f}")
+        self.total_customer_loan_label.setText(f"Total Loan Amount (₹): {format_indian_currency(total_loan)}")
+        self.total_customer_due_label.setText(f"Total Amount Due (₹): {format_indian_currency(total_due)}")
         
         # Add the rest of customer info
         if customer_info:
@@ -427,9 +437,9 @@ class GenerateReport(StyledWidget):
             loan_date = datetime.strptime((loan[0]).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d").strftime("%d-%m-%Y")
             registered_reference_id = loan[6]  # Get registered_reference_id from the tuple
             asset_descriptions = loan[1]
-            total_weight = f"{float(loan[2]):,.2f}" if loan[2] else "0.00"
-            loan_amount = f"{float(loan[3]):,.2f}" if loan[3] else "0.00"
-            amount_due = f"{float(loan[4]):,.2f}" if loan[4] else "0.00"
+            total_weight = f"{format_indian_currency(float(loan[2]))}" if loan[2] else "0.00"
+            loan_amount = f"{format_indian_currency(float(loan[3]))}" if loan[3] else "0.00"
+            amount_due = f"{format_indian_currency(float(loan[4]))}" if loan[4] else "0.00"
             
             # Set values in the table
             self.loan_details_table.setItem(row_idx, 0, QTableWidgetItem(loan_date))
@@ -507,13 +517,13 @@ class GenerateReport(StyledWidget):
                     
                 try:
                     loan_amount = float(loan[3]) if loan[3] else 0
-                    pdf.cell(0, 10, f"Total Loan Amount: Rs{loan_amount:,.2f}", 0, 1)
+                    pdf.cell(0, 10, f"Total Loan Amount: Rs{format_indian_currency(loan_amount)}", 0, 1)
                 except:
                     pdf.cell(0, 10, "Total Loan Amount: Error calculating", 0, 1)
                     
                 try:
                     due_amount = float(loan[4]) if loan[4] else 0
-                    pdf.cell(0, 10, f"Amount Due: Rs{due_amount:,.2f}", 0, 1)
+                    pdf.cell(0, 10, f"Amount Due: Rs{format_indian_currency(due_amount)}", 0, 1)
                 except:
                     pdf.cell(0, 10, "Amount Due: Error calculating", 0, 1)
 
@@ -562,19 +572,19 @@ class GenerateReport(StyledWidget):
                             
                             try:
                                 payment_amount = float(payment['payment_amount']) if payment['payment_amount'] else 0
-                                pdf.cell(0, 10, f"Amount Paid: Rs{payment_amount:,.2f}", 0, 1)
+                                pdf.cell(0, 10, f"Amount Paid: Rs{format_indian_currency(payment_amount)}", 0, 1)
                             except:
                                 pdf.cell(0, 10, "Amount Paid: Error calculating", 0, 1)
                                 
                             try:
                                 interest_amount = float(payment['interest_amount']) if payment['interest_amount'] else 0
-                                pdf.cell(0, 10, f"Interest Paid: Rs{interest_amount:,.2f}", 0, 1)
+                                pdf.cell(0, 10, f"Interest Paid: Rs{format_indian_currency(interest_amount)}", 0, 1)
                             except:
                                 pdf.cell(0, 10, "Interest Paid: Error calculating", 0, 1)
                                 
                             try:
                                 amount_left = float(payment['amount_left']) if payment['amount_left'] else 0
-                                pdf.cell(0, 10, f"Remaining Amount: Rs{amount_left:,.2f}", 0, 1)
+                                pdf.cell(0, 10, f"Remaining Amount: Rs{format_indian_currency(amount_left)}", 0, 1)
                             except:
                                 pdf.cell(0, 10, "Remaining Amount: Error calculating", 0, 1)
                                 

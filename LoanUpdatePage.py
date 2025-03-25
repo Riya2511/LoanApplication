@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (
     QTableWidgetItem, QDateEdit, QDialog, QDialogButtonBox
 )
 from PyQt5.QtCore import QDate
-from helper import StyledWidget
+from helper import StyledWidget, format_indian_currency
 from DatabaseManager import DatabaseManager
 from datetime import datetime
 
@@ -194,6 +194,12 @@ class LoanUpdatePage(StyledWidget):
             ["Loan Date", "Registered Reference Id", "Asset Description", "Total Weight (g)", "Total Amount (₹)", "Amount Due (₹)", ""]
         )
         self.loan_table.setColumnWidth(1, 200)
+        self.loan_table.setColumnWidth(2, 150)
+        self.loan_table.setColumnWidth(3, 150)
+        self.loan_table.setColumnWidth(4, 150)
+        self.loan_table.setColumnWidth(5, 150)
+        self.loan_table.setColumnWidth(6, 150)
+
         self.loan_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.loan_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.loan_table.setSelectionMode(QTableWidget.SingleSelection)
@@ -295,7 +301,7 @@ class LoanUpdatePage(StyledWidget):
         for row_idx, (description, weight) in enumerate(assets):
             # Asset description
             self.assets_table.setItem(row_idx, 0, QTableWidgetItem(description))
-            self.assets_table.setItem(row_idx, 1, QTableWidgetItem(f"{weight:,.2f}"))
+            self.assets_table.setItem(row_idx, 1, QTableWidgetItem(f"{format_indian_currency(weight)}"))
             
             # Amount paid input
             amount_input = QLineEdit()
@@ -366,9 +372,9 @@ class LoanUpdatePage(StyledWidget):
                 
                 self.repayment_table.setItem(row_idx, 0, QTableWidgetItem(formatted_date))
                 self.repayment_table.setItem(row_idx, 1, QTableWidgetItem(repayment.get("asset_description", "")))
-                self.repayment_table.setItem(row_idx, 2, QTableWidgetItem(f"{float(repayment['payment_amount']):,.2f}"))
-                self.repayment_table.setItem(row_idx, 3, QTableWidgetItem(f"{float(repayment['interest_amount']):,.2f}"))
-                self.repayment_table.setItem(row_idx, 4, QTableWidgetItem(f"{float(repayment['amount_left']):,.2f}"))
+                self.repayment_table.setItem(row_idx, 2, QTableWidgetItem(f"{format_indian_currency(float(repayment['payment_amount']))}"))
+                self.repayment_table.setItem(row_idx, 3, QTableWidgetItem(f"{format_indian_currency(float(repayment['interest_amount']))}"))
+                self.repayment_table.setItem(row_idx, 4, QTableWidgetItem(f"{format_indian_currency(float(repayment['amount_left']))}"))
                 
                 # Add edit button
                 edit_button = QPushButton("Edit")
@@ -472,7 +478,7 @@ class LoanUpdatePage(StyledWidget):
             loan_amount = DatabaseManager.get_loan_amount(self.current_loan_id)
             
             if total_paid + amount > loan_amount:
-                raise ValueError(f"Total payments would exceed loan amount (₹{loan_amount:,.2f})")
+                raise ValueError(f"Total payments would exceed loan amount (₹{format_indian_currency(loan_amount)})")
 
             # Insert payment with the selected date
             DatabaseManager.insert_loan_payment(
@@ -794,9 +800,9 @@ class LoanUpdatePage(StyledWidget):
             self.loan_table.setItem(row_idx, 0, QTableWidgetItem(formatted_date))
             self.loan_table.setItem(row_idx, 1, QTableWidgetItem(registered_reference_id))
             self.loan_table.setItem(row_idx, 2, QTableWidgetItem(asset_descriptions or ""))
-            self.loan_table.setItem(row_idx, 3, QTableWidgetItem(f"{float(total_weight):,.2f}" if total_weight else "0.00"))
-            self.loan_table.setItem(row_idx, 4, QTableWidgetItem(f"{float(loan_amount):,.2f}" if loan_amount else "0.00"))
-            self.loan_table.setItem(row_idx, 5, QTableWidgetItem(f"{float(amount_due):,.2f}" if amount_due else "0.00"))
+            self.loan_table.setItem(row_idx, 3, QTableWidgetItem(f"{format_indian_currency(float(total_weight))}" if total_weight else "0.00"))
+            self.loan_table.setItem(row_idx, 4, QTableWidgetItem(f"{format_indian_currency(float(loan_amount))}" if loan_amount else "0.00"))
+            self.loan_table.setItem(row_idx, 5, QTableWidgetItem(f"{format_indian_currency(float(amount_due))}" if amount_due else "0.00"))
             
             # Add update button
             update_button = QPushButton("Repay Amount")

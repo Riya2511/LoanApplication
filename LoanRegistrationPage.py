@@ -1,5 +1,5 @@
 from PyQt5.QtCore import QEvent, Qt
-from helper import StyledWidget
+from helper import StyledWidget, format_indian_currency
 from DatabaseManager import DatabaseManager
 from PyQt5.QtWidgets import (QPushButton, QLineEdit, QFormLayout, QMessageBox, 
                            QLabel, QHBoxLayout, QComboBox, QGroupBox, QVBoxLayout,
@@ -358,10 +358,10 @@ class LoanRegistrationPage(StyledWidget):
                 
                 ref_id = loan[6] or "N/A"
                 assets = loan[1] or "N/A"
-                total_weight = f"{loan[2]:.2f}"
-                loan_amount = f"{loan[3]:.2f}"
-                amount_due = f"{loan[4]:.2f}"
-                interest_paid = f"{loan[5]:.2f}"
+                total_weight = f"{loan[2]}"
+                loan_amount = f"{loan[3]}"
+                amount_due = f"{loan[4]}"
+                interest_paid = f"{loan[5]}"
                 status = "Completed" if float(loan[4]) <= 0 else "Pending"
                 
                 # Check if filter text is in any of the columns
@@ -404,10 +404,10 @@ class LoanRegistrationPage(StyledWidget):
             self.loans_table.setItem(row, 0, QTableWidgetItem(formatted_date))
             self.loans_table.setItem(row, 1, QTableWidgetItem(loan[6] or "N/A"))  # Registered Reference Id
             self.loans_table.setItem(row, 2, QTableWidgetItem(loan[1] or "N/A"))  # Assets
-            self.loans_table.setItem(row, 3, QTableWidgetItem(f"{loan[2]:.2f}"))  # Total Weight
-            self.loans_table.setItem(row, 4, QTableWidgetItem(f"{loan[3]:.2f}"))  # Loan Amount
-            self.loans_table.setItem(row, 5, QTableWidgetItem(f"{loan[4]:.2f}"))  # Amount Due
-            self.loans_table.setItem(row, 6, QTableWidgetItem(f"{loan[5]:.2f}"))  # Interest Paid
+            self.loans_table.setItem(row, 3, QTableWidgetItem(f"{format_indian_currency(loan[2])}"))  # Total Weight
+            self.loans_table.setItem(row, 4, QTableWidgetItem(f"{format_indian_currency(loan[3])}"))  # Loan Amount
+            self.loans_table.setItem(row, 5, QTableWidgetItem(f"{format_indian_currency(loan[4])}"))  # Amount Due
+            self.loans_table.setItem(row, 6, QTableWidgetItem(f"{format_indian_currency(loan[5])}"))  # Interest Paid
             
             status = "Completed" if float(loan[4]) <= 0 else "Pending"
             self.loans_table.setItem(row, 7, QTableWidgetItem(status))

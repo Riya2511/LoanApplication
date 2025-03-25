@@ -125,6 +125,50 @@ class StyledWidget(QWidget):
         label.setStyleSheet("font-size: 16px;")
         label.setProperty("class", "info-label")
         return label
+    
+def format_indian_currency(amount):
+    """
+    Convert a number to Indian currency format.
+    
+    Args:
+        amount (float or int): The number to be formatted
+    
+    Returns:
+        str: Formatted number in Indian currency style
+    """
+    try:
+        # Convert to float and handle potential None or zero values
+        amount = float(amount) if amount is not None else 0.0
+        
+        # Split into integer and decimal parts
+        integer_part, decimal_part = f"{amount:.2f}".split('.')
+        # Handle negative numbers
+        is_negative = integer_part.startswith('-')
+        if is_negative:
+            integer_part = integer_part[1:]
+        
+        # Reverse the integer part for easier processing
+        reversed_integer = integer_part[::-1]
+        
+        # Add commas in Indian number format (every 2 digits after first 3)
+        formatted_integer = []
+        for i, digit in enumerate(reversed_integer):
+            if i != 0 and i != 1 and i % 2 != 0 and i < len(reversed_integer):
+                formatted_integer.append(',')
+            formatted_integer.append(digit)
+        
+        # Reverse back and join
+        final_integer = ''.join(formatted_integer)[::-1]
+        
+        # Add negative sign back if needed
+        if is_negative:
+            final_integer = f'-{final_integer}'
+        
+        # Combine integer and decimal parts
+        return f"{final_integer}.{decimal_part}"
+    
+    except (TypeError, ValueError):
+        return str(amount)
 
 def hashSerialNumber(serialNumber: str):
     dataEncoded = str(serialNumber).encode("utf-8")
