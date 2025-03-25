@@ -46,10 +46,10 @@ class GenerateReport(StyledWidget):
         
         # Add years to dropdown (last 10 years)
         self.year_dropdown.addItem("All Years", None)
-        for year in range(current_year, current_year - 10, -1):
-            self.year_dropdown.addItem(str(year), year)
-        
         for year in range(current_year+1, current_year+5): 
+            self.year_dropdown.addItem(str(year), year)
+            
+        for year in range(current_year, current_year - 10, -1):
             self.year_dropdown.addItem(str(year), year)
         
         year_layout.addWidget(QLabel("Select Year:"))
