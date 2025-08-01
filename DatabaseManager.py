@@ -530,33 +530,6 @@ class DatabaseManager:
 
     @staticmethod
     def fetch_loan_details_to_edit(loan_id):
-        """Fetches loan details for a given loan ID."""
-        query = """
-        SELECT loan_date, registered_reference_id, loan_amount
-        FROM LoanView
-        WHERE loan_id = ?
-        """
-        try: 
-            conn = DatabaseManager.create_connection()
-            cursor = conn.cursor()
-
-            cursor.execute(query, (loan_id, ))
-            result = cursor.fetchone()[0]
-            if result:
-                return {
-                    "loan_date": result[0],
-                    "registered_reference_id": result[1],
-                    "loan_amount_left": result[2]
-                }
-        except sqlite3.Error as e:
-            print(f"Database error while fetching load details to edit: {e}")
-            return None
-        finally:
-            if conn:
-                conn.close()
-    
-    @staticmethod
-    def fetch_loan_details_to_edit(loan_id):
         """Fetch loan details along with the asset details."""
         query = """
         SELECT l.registered_reference_id, l.loan_amount, a.description, a.weight
@@ -834,3 +807,43 @@ class DatabaseManager:
         except Exception as e:
             print(f"Error fetching loan amount due: {e}")
             return float('inf')  # Return infinity if error, to ensure button remains disabled
+        
+    @staticmethod
+    def fetch_all_loans_to_generate_report(year=None):
+        """
+        Fetch all loans, optionally filtered by year.
+        
+        Args:
+            year: Optional year to filter by
+        
+        Returns:
+            list: List of loan data from LoanView
+        """
+        try:
+            conn = DatabaseManager.create_connection()
+            cursor = conn.cursor()
+            
+            if year:
+                # Get loans for the specified customer in the specified year
+                query = """
+                    SELECT * FROM LoanView
+                    WHERE strftime('%Y', loan_date) = ?
+                    ORDER BY loan_date DESC
+                """
+                cursor.execute(query, (str(year),))
+            else:
+                # Get all loans for the specified customer
+                query = """
+                    SELECT * FROM LoanView
+                    ORDER BY loan_date DESC
+                """
+                cursor.execute(query)
+
+            return cursor.fetchall()
+        
+        except sqlite3.Error as e:
+            print(f"Database error while fetching loans: {e}")
+            return []
+        finally:
+            if conn:
+                conn.close()

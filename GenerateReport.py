@@ -20,12 +20,18 @@ class GenerateReport(StyledWidget):
         self.assets_table = None
         self.loan_payments_table = None
         self.selected_year = None
+        
+        # Cache for data to avoid repeated DB calls
+        self.all_loans_cache = []
+        self.all_customers_cache = []
+        self.loans_by_customer_cache = {}
+        self.data_loaded = False
+        
         self.init_ui()
         
         # Hide elements initially
         self.customer_info_group.setVisible(False)
-        self.loan_details_table.setVisible(False)
-        self.generate_pdf_button.setEnabled(False)
+        self.generate_pdf_button.setEnabled(True)  # Enable since we can generate reports for all loans
 
     def init_ui(self):
         # Year Selection
@@ -255,25 +261,104 @@ class GenerateReport(StyledWidget):
 
         self.content_layout.addStretch(1)
 
+    def load_all_data(self):
+        """Load all data once and cache it for fast filtering."""
+        if self.data_loaded:
+            return
+            
+        # Load all loans once
+        self.all_loans_cache = DatabaseManager.fetch_all_loans_to_generate_report(None)  # Get all years
+        
+        # Load all customers once
+        self.all_customers_cache = DatabaseManager.get_customers_by_year(None)  # Get all customers
+        
+        # Pre-process loans by customer for faster customer-specific filtering
+        self.loans_by_customer_cache = {}
+        for loan in self.all_loans_cache:
+            customer_id = loan[8]  # Assuming customer_id is at index 8
+            if customer_id not in self.loans_by_customer_cache:
+                self.loans_by_customer_cache[customer_id] = []
+            self.loans_by_customer_cache[customer_id].append(loan)
+        
+        self.data_loaded = True
+
+    def filter_loans_by_year(self, loans, year):
+        """Filter loans by year on the client side."""
+        if not year:
+            return loans
+            
+        filtered_loans = []
+        for loan in loans:
+            try:
+                loan_date = datetime.strptime(str(loan[0]).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d")
+                if loan_date.year == year:
+                    filtered_loans.append(loan)
+            except (ValueError, TypeError):
+                # Include corrupted dates only when showing all years
+                continue
+                
+        return filtered_loans
+
+    def filter_customers_by_year(self, customers, year):
+        """Filter customers by year based on cached loan data."""
+        if not year:
+            return customers
+            
+        # Get customer IDs who had loans in the specified year
+        customer_ids_with_loans = set()
+        year_filtered_loans = self.filter_loans_by_year(self.all_loans_cache, year)
+        for loan in year_filtered_loans:
+            customer_ids_with_loans.add(loan[8])  # customer_id at index 8
+            
+        # Filter customers
+        filtered_customers = [
+            customer for customer in customers 
+            if customer[0] in customer_ids_with_loans
+        ]
+        
+        return filtered_customers
+
+    def get_summary_stats_from_cache(self, year):
+        """Calculate summary stats from cached data."""
+        filtered_loans = self.filter_loans_by_year(self.all_loans_cache, year)
+        
+        # Count unique customers
+        unique_customers = set()
+        total_due = 0
+        
+        for loan in filtered_loans:
+            unique_customers.add(loan[8])  # customer_id
+            try:
+                due_amount = float(loan[4]) if loan[4] else 0  # amount_due
+                total_due += due_amount
+            except (ValueError, TypeError):
+                continue
+                
+        return len(unique_customers), total_due
+
     def on_year_selected(self):
-        """Handle year selection change"""
+        """Handle year selection change using cached data."""
         self.selected_year = self.year_dropdown.currentData()
         # Reset customer selection
         self.customer_dropdown.setCurrentIndex(0)
-        # Update summary data for selected year
+        # Update summary data for selected year from cache
         self.refresh_summary_data()
-        # Update customer dropdown with customers from selected year
+        # Update customer dropdown with customers from selected year using cache
         self.populate_customer_dropdown()
-        # Hide customer info and loan details
+        # Hide customer info but show all loans for the selected year
         self.customer_info_group.setVisible(False)
-        self.loan_details_table.setVisible(False)
+        self.loan_details_table.setVisible(True)
         self.update_group.setVisible(False)
-        self.generate_pdf_button.setEnabled(False)
+        self.generate_pdf_button.setEnabled(True)  # Always enable PDF generation
+        # Populate all loans for the selected year using cache
+        self.populate_all_loans_table()
 
     def refresh_summary_data(self):
-        """Refresh the summary statistics for total customers and loan amount due."""
-        year = self.selected_year
-        total_customers, total_loan_due = DatabaseManager.get_summary_stats_to_generate_report(year)
+        """Refresh the summary statistics using cached data."""
+        if not self.data_loaded:
+            return
+            
+        total_customers, total_loan_due = self.get_summary_stats_from_cache(self.selected_year)
 
         # Update the labels
         self.total_customers_label.setText(f"Total Customers: {total_customers}")
@@ -328,40 +413,56 @@ class GenerateReport(StyledWidget):
     def showEvent(self, event: QEvent):
         """Handle page load event and refresh customer data."""
         if event.type() == QEvent.Show:
+            # Load all data once for fast filtering
+            self.load_all_data()
+            
             # Reset year selection to All Years
             self.year_dropdown.setCurrentIndex(0)
             self.populate_customer_dropdown()
-            # Reset selection and hide elements
+            # Reset selection and show all loans initially
             self.customer_dropdown.setCurrentIndex(0)
             self.customer_info_group.setVisible(False)
-            self.loan_details_table.setVisible(False)
+            self.loan_details_table.setVisible(True)
             self.update_group.setVisible(False)
-            self.generate_pdf_button.setEnabled(False)
+            self.generate_pdf_button.setEnabled(True)  # Always enable PDF generation
+            
+            # Refresh summary and populate loans
+            self.refresh_summary_data()
+            self.populate_all_loans_table()
         super().showEvent(event)
 
     def populate_customer_dropdown(self):
-        """Populate the dropdown with the latest customer data."""
+        """Populate the dropdown with cached customer data."""
         self.customer_dropdown.clear()
         # Add the initial placeholder
         self.customer_dropdown.addItem("Select a customer", None)
         
-        customers = DatabaseManager.get_customers_by_year(self.selected_year)
+        if not self.data_loaded:
+            return
+            
+        # Filter customers based on selected year using cache
+        customers = self.filter_customers_by_year(self.all_customers_cache, self.selected_year)
+        
         if customers:
             for customer_id, name, account_number in customers:
                 self.customer_dropdown.addItem(f"{name}", customer_id)
 
     def filter_customers(self, text):
-        """Filter customers based on search text."""
+        """Filter customers based on search text using cached data."""
         self.customer_dropdown.clear()
         # Always add the initial placeholder
         self.customer_dropdown.addItem("Select a customer", None)
         
-        customers = DatabaseManager.get_customers_by_year(self.selected_year)
+        if not self.data_loaded:
+            return
+        
+        # Filter customers based on selected year using cache
+        customers = self.filter_customers_by_year(self.all_customers_cache, self.selected_year)
         
         filtered_customers = [
             (customer_id, name, account_number) 
             for customer_id, name, account_number in customers 
-            if text.lower() in f"{name} {account_number}".lower()
+            if text.lower() in f"{name} {account_number if account_number else ''}".lower()
         ]
         if filtered_customers:
             for customer_id, name, account_number in filtered_customers:
@@ -376,18 +477,19 @@ class GenerateReport(StyledWidget):
         # Show/hide elements based on selection
         has_selection = self.selected_customer_id is not None
         self.customer_info_group.setVisible(has_selection)
-        self.loan_details_table.setVisible(has_selection)
-        self.generate_pdf_button.setEnabled(has_selection)
+        self.loan_details_table.setVisible(True)  # Always show the table
+        self.generate_pdf_button.setEnabled(True)  # Always enable PDF generation
         
-        # Clear tables if no selection
-        if not has_selection:
-            self.loan_details_table.setRowCount(0)
-            self.update_group.setVisible(False)
-            return
-            
-        # Populate data if customer is selected
-        self.populate_customer_info()
-        self.populate_loans_table()
+        # Clear update group when customer selection changes
+        self.update_group.setVisible(False)
+        
+        if has_selection:
+            # Populate data if customer is selected
+            self.populate_customer_info()
+            self.populate_loans_table()
+        else:
+            # Show all loans if no customer is selected
+            self.populate_all_loans_table()
 
     def populate_customer_info(self):
         """Populate customer information in the customer info group."""
@@ -418,23 +520,90 @@ class GenerateReport(StyledWidget):
                 customer_info_layout.addWidget(label)
 
     def populate_loans_table(self):
-        """Populate the loan table with loans for the selected customer."""
+        """Populate the loan table with loans for the selected customer using cached data."""
         self.loan_details_table.setRowCount(0)  # Clear existing rows
         
-        if not self.selected_customer_id:
+        if not self.selected_customer_id or not self.data_loaded:
             return
             
-        # Get loans filtered by year if selected
-        loans = DatabaseManager.fetch_loans_for_customer_to_generate_report(self.selected_customer_id, self.selected_year)
+        # Get loans for customer from cache
+        customer_loans = self.loans_by_customer_cache.get(self.selected_customer_id, [])
+        
+        # Filter by year
+        loans = self.filter_loans_by_year(customer_loans, self.selected_year)
         
         if not loans:
             return
-        loans = sorted(loans, key=lambda loan: datetime.strptime(str(loan[0]).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d"), reverse=True)
+            
+        # Sort loans by date with error handling for corrupted dates
+        def safe_date_parse(loan):
+            try:
+                return datetime.strptime(str(loan[0]).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d")
+            except (ValueError, TypeError):
+                # Return a very old date for corrupted entries so they appear at the bottom
+                return datetime(1900, 1, 1)
+        
+        loans = sorted(loans, key=safe_date_parse, reverse=True)
+        
         for row_idx, loan in enumerate(loans):
             self.loan_details_table.insertRow(row_idx)
             
-            # Format the loan data for display
-            loan_date = datetime.strptime((loan[0]).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d").strftime("%d-%m-%Y")
+            # Format the loan data for display with error handling
+            try:
+                loan_date = datetime.strptime((loan[0]).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d").strftime("%d-%m-%Y")
+            except (ValueError, TypeError):
+                loan_date = f"Invalid Date: {str(loan[0])}"  # Show the corrupted date as-is
+                
+            registered_reference_id = loan[6]  # Get registered_reference_id from the tuple
+            asset_descriptions = loan[1]
+            total_weight = f"{format_indian_currency(float(loan[2]))}" if loan[2] else "0.00"
+            loan_amount = f"{format_indian_currency(float(loan[3]))}" if loan[3] else "0.00"
+            amount_due = f"{format_indian_currency(float(loan[4]))}" if loan[4] else "0.00"
+            
+            # Set values in the table
+            self.loan_details_table.setItem(row_idx, 0, QTableWidgetItem(loan_date))
+            self.loan_details_table.setItem(row_idx, 1, QTableWidgetItem(registered_reference_id))
+            self.loan_details_table.setItem(row_idx, 2, QTableWidgetItem(asset_descriptions))
+            self.loan_details_table.setItem(row_idx, 3, QTableWidgetItem(total_weight))
+            self.loan_details_table.setItem(row_idx, 4, QTableWidgetItem(loan_amount))
+            self.loan_details_table.setItem(row_idx, 5, QTableWidgetItem(amount_due))
+            
+            view_button = QPushButton("View More")
+            view_button.clicked.connect(lambda checked, lid=loan[7]: self.show_loan_details(lid))
+            self.loan_details_table.setCellWidget(row_idx, 6, view_button)
+
+    def populate_all_loans_table(self):
+        """Populate the loan table with all loans using cached data."""
+        self.loan_details_table.setRowCount(0)  # Clear existing rows
+        
+        if not self.data_loaded:
+            return
+        
+        # Filter loans by year from cache
+        loans = self.filter_loans_by_year(self.all_loans_cache, self.selected_year)
+        
+        if not loans:
+            return
+            
+        # Sort loans by date with error handling for corrupted dates
+        def safe_date_parse(loan):
+            try:
+                return datetime.strptime(str(loan[0]).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d")
+            except (ValueError, TypeError):
+                # Return a very old date for corrupted entries so they appear at the bottom
+                return datetime(1900, 1, 1)
+        
+        loans = sorted(loans, key=safe_date_parse, reverse=True)
+        
+        for row_idx, loan in enumerate(loans):
+            self.loan_details_table.insertRow(row_idx)
+            
+            # Format the loan data for display with error handling
+            try:
+                loan_date = datetime.strptime((loan[0]).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d").strftime("%d-%m-%Y")
+            except (ValueError, TypeError):
+                loan_date = f"Invalid Date: {str(loan[0])}"  # Show the corrupted date as-is
+                
             registered_reference_id = loan[6]  # Get registered_reference_id from the tuple
             asset_descriptions = loan[1]
             total_weight = f"{format_indian_currency(float(loan[2]))}" if loan[2] else "0.00"
@@ -454,173 +623,202 @@ class GenerateReport(StyledWidget):
             self.loan_details_table.setCellWidget(row_idx, 6, view_button)
 
     def generate_pdf_report(self):
-        """Generate a comprehensive PDF report for the selected customer."""
-        if not self.selected_customer_id:
-            QMessageBox.warning(self, "Error", "Please select a customer first.")
-            return
+        """Generate a modern tabular PDF report for the displayed data using cached data."""
         try:
-            customer_info = DatabaseManager.get_customer_by_id(self.selected_customer_id)
-            loans = DatabaseManager.fetch_loans_for_customer_to_generate_report(self.selected_customer_id, self.selected_year)
+            if self.selected_customer_id:
+                # Generate customer-specific report using cache
+                customer_info = DatabaseManager.get_customer_by_id(self.selected_customer_id)
+                customer_loans = self.loans_by_customer_cache.get(self.selected_customer_id, [])
+                loans = self.filter_loans_by_year(customer_loans, self.selected_year)
+                report_title = f"CUSTOMER LOAN REPORT"
+                if self.selected_year:
+                    report_title += f" - {self.selected_year}"
+            else:
+                # Generate report for all loans using cache
+                customer_info = None
+                loans = self.filter_loans_by_year(self.all_loans_cache, self.selected_year)
+                report_title = f"ALL LOANS REPORT"
+                if self.selected_year:
+                    report_title += f" - {self.selected_year}"
+                else:
+                    report_title += " - ALL YEARS"
+            
+            if not loans:
+                QMessageBox.warning(self, "Error", "No loan data found for the current filter.")
+                return
 
             pdf = FPDF()
             pdf.add_page()
-            pdf.set_font('Arial', 'B', 16)
             
-            # Helper function to sanitize text - use ASCII only, completely remove problematic characters
+            # Helper function to sanitize text
             def sanitize_text(text):
                 if text is None:
                     return "N/A"
                 try:
-                    # Convert to string first
                     text = str(text)
-                    # Remove all non-ASCII characters
                     return ''.join(char for char in text if ord(char) < 128)
                 except:
-                    # If any error, return safe text
                     return "Text contains unsupported characters"
             
-            # Add report title with year filter if applicable
-            if self.selected_year:
-                pdf.cell(0, 10, f"Customer Loan Report ({self.selected_year})", 0, 1)
-            else:
-                pdf.cell(0, 10, "Customer Loan Report (All Years)", 0, 1)
-
-            # Customer Information
-            pdf.set_font('Arial', '', 12)
-            pdf.cell(0, 10, f"Name: {sanitize_text(customer_info.get('name', 'N/A'))}", 0, 1)
-            pdf.cell(0, 10, f"Phone: {sanitize_text(customer_info.get('phone', 'N/A'))}", 0, 1)
-            pdf.cell(0, 10, f"Address: {sanitize_text(customer_info.get('address', 'N/A'))}", 0, 1)
-
-            # Loan Details
-            for loan in loans:
-                pdf.ln(10)
+            # Color scheme
+            header_color = (41, 128, 185)  # Blue
+            alternate_row_color = (245, 245, 245)  # Light gray
+            text_color = (52, 73, 94)  # Dark gray
+            
+            # Header Section with styling
+            pdf.set_fill_color(*header_color)
+            pdf.set_text_color(255, 255, 255)  # White text
+            pdf.set_font('Arial', 'B', 20)
+            
+            # Title with background
+            pdf.cell(0, 15, report_title, 0, 1, 'C', True)
+            pdf.ln(5)
+            
+            # Customer Information Section (only for customer-specific reports)
+            if customer_info:
+                pdf.set_fill_color(240, 240, 240)
+                pdf.set_text_color(*text_color)
                 pdf.set_font('Arial', 'B', 14)
-                pdf.cell(0, 10, "Loan Details", 0, 1)
+                pdf.cell(0, 10, "CUSTOMER INFORMATION", 0, 1, 'L', True)
+                pdf.ln(2)
                 
-                pdf.set_font('Arial', '', 12)
-                # Sanitize date format
+                # Customer details in a neat format
+                pdf.set_font('Arial', '', 11)
+                customer_data = [
+                    ["Name:", sanitize_text(customer_info.get('name', 'N/A'))],
+                    ["Phone:", sanitize_text(customer_info.get('phone', 'N/A'))],
+                    ["Address:", sanitize_text(customer_info.get('address', 'N/A'))],
+                    ["Account No:", sanitize_text(customer_info.get('account_number', 'N/A'))]
+                ]
+                
+                for label, value in customer_data:
+                    pdf.set_font('Arial', 'B', 10)
+                    pdf.cell(40, 8, label, 0, 0)
+                    pdf.set_font('Arial', '', 10)
+                    pdf.cell(0, 8, value, 0, 1)
+                
+                pdf.ln(5)
+                
+                # Summary Section for customer
+                total_loan, total_due = DatabaseManager.get_customer_loan_totals(
+                    self.selected_customer_id, self.selected_year)
+                
+                pdf.set_fill_color(46, 204, 113)  # Green
+                pdf.set_text_color(255, 255, 255)
+                pdf.set_font('Arial', 'B', 12)
+                pdf.cell(0, 10, "CUSTOMER SUMMARY", 0, 1, 'L', True)
+                pdf.ln(2)
+                
+                pdf.set_text_color(*text_color)
+                pdf.set_font('Arial', 'B', 11)
+                pdf.cell(100, 8, f"Total Loan Amount: Rs {format_indian_currency(total_loan)}", 0, 0)
+                pdf.cell(0, 8, f"Total Amount Due: Rs {format_indian_currency(total_due)}", 0, 1)
+                pdf.ln(8)
+            else:
+                # Summary Section for all loans using cache
+                total_customers, total_loan_due = self.get_summary_stats_from_cache(self.selected_year)
+                
+                pdf.set_fill_color(46, 204, 113)  # Green
+                pdf.set_text_color(255, 255, 255)
+                pdf.set_font('Arial', 'B', 12)
+                pdf.cell(0, 10, "OVERALL SUMMARY", 0, 1, 'L', True)
+                pdf.ln(2)
+                
+                pdf.set_text_color(*text_color)
+                pdf.set_font('Arial', 'B', 11)
+                pdf.cell(100, 8, f"Total Customers: {total_customers}", 0, 0)
+                pdf.cell(0, 8, f"Total Amount Due: Rs {format_indian_currency(total_loan_due)}", 0, 1)
+                pdf.ln(8)
+            
+            # Loans Table Header
+            pdf.set_fill_color(*header_color)
+            pdf.set_text_color(255, 255, 255)
+            pdf.set_font('Arial', 'B', 11)
+            pdf.cell(0, 10, "LOAN DETAILS", 0, 1, 'L', True)
+            pdf.ln(2)
+            
+            # Table headers
+            pdf.set_font('Arial', 'B', 9)
+            headers = ["Date", "Ref ID", "Assets", "Weight(g)", "Amount(Rs)", "Due(Rs)"]
+            col_widths = [25, 35, 45, 25, 30, 30]  # Column widths
+            
+            pdf.set_fill_color(52, 73, 94)  # Dark blue-gray
+            for i, header in enumerate(headers):
+                pdf.cell(col_widths[i], 8, header, 1, 0, 'C', True)
+            pdf.ln()
+            
+            # Sort loans by date (most recent first) with error handling
+            def safe_date_parse_pdf(loan):
+                try:
+                    return datetime.strptime(str(loan[0]).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d")
+                except (ValueError, TypeError):
+                    # Return a very old date for corrupted entries so they appear at the bottom
+                    return datetime(1900, 1, 1)
+            
+            loans = sorted(loans, key=safe_date_parse_pdf, reverse=True)
+            
+            # Table rows
+            pdf.set_text_color(*text_color)
+            pdf.set_font('Arial', '', 8)
+            
+            for row_idx, loan in enumerate(loans):
+                # Alternate row colors
+                if row_idx % 2 == 0:
+                    pdf.set_fill_color(*alternate_row_color)
+                else:
+                    pdf.set_fill_color(255, 255, 255)
+                
+                # Format data
                 try:
                     loan_date = datetime.strptime(str(loan[0]).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d")
-                    formatted_date = loan_date.strftime('%d-%m-%Y')
+                    formatted_date = loan_date.strftime("%d/%m/%y")
                 except:
-                    formatted_date = "Invalid date"
-                    
-                pdf.cell(0, 10, f"Loan Date: {formatted_date}", 0, 1)
-                pdf.cell(0, 10, f"Registered Reference Id: {sanitize_text(str(loan[6]))}", 0, 1)
+                    formatted_date = "Invalid"
                 
-                # Handle numeric values safely
-                try:
-                    weight = float(loan[2]) if loan[2] else 0
-                    pdf.cell(0, 10, f"Total Weight: {weight} g", 0, 1)
-                except:
-                    pdf.cell(0, 10, "Total Weight: Error calculating", 0, 1)
-                    
-                try:
-                    loan_amount = float(loan[3]) if loan[3] else 0
-                    pdf.cell(0, 10, f"Total Loan Amount: Rs{format_indian_currency(loan_amount)}", 0, 1)
-                except:
-                    pdf.cell(0, 10, "Total Loan Amount: Error calculating", 0, 1)
-                    
-                try:
-                    due_amount = float(loan[4]) if loan[4] else 0
-                    pdf.cell(0, 10, f"Amount Due: Rs{format_indian_currency(due_amount)}", 0, 1)
-                except:
-                    pdf.cell(0, 10, "Amount Due: Error calculating", 0, 1)
-
-                # Add assets
-                pdf.ln(5)
-                pdf.set_font('Arial', 'B', 12)
-                pdf.cell(0, 10, "Assets:", 0, 1)
-                try:
-                    assets = DatabaseManager.fetch_loan_assets(loan[7])  # Using loan_id
-                    pdf.set_font('Arial', '', 12)
-                    if assets:
-                        for desc, weight in assets:
-                            pdf.cell(0, 10, f"  Asset Description: {sanitize_text(str(desc))}", 0, 1)
-                            try:
-                                weight_val = float(weight) if weight else 0
-                                pdf.cell(0, 10, f"  Weight: {weight_val}g", 0, 1)
-                            except:
-                                pdf.cell(0, 10, "  Weight: Error calculating", 0, 1)
-                            pdf.ln(2)
-                    else:
-                        pdf.cell(0, 10, "No assets found", 0, 1)
-                except Exception as asset_error:
-                    pdf.cell(0, 10, f"Error retrieving assets: {sanitize_text(str(asset_error))}", 0, 1)
-
-                # Add loan payments
-                pdf.ln(5)
-                pdf.set_font('Arial', 'B', 12)
-                pdf.cell(0, 10, "Payment History:", 0, 1)
-                try:
-                    payments = DatabaseManager.fetch_loan_payments(loan[7])
-                    pdf.set_font('Arial', '', 12)
-                    if payments:
-                        payments = sorted(payments, key=lambda payment: datetime.strptime(str(payment['payment_date']).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d"), reverse=True)
-                        for payment in payments:
-                            try:
-                                payment_date = datetime.strptime(
-                                    str(payment['payment_date']).replace('00:00:00', '').replace(' ', ''), 
-                                    "%Y-%m-%d"
-                                )
-                                formatted_payment_date = payment_date.strftime('%d-%m-%Y')
-                            except:
-                                formatted_payment_date = "Invalid date"
-                                
-                            pdf.cell(0, 10, f"Date: {formatted_payment_date}", 0, 1)
-                            pdf.cell(0, 10, f"Asset: {sanitize_text(str(payment.get('asset_description', 'N/A')))}", 0, 1)
-                            
-                            try:
-                                payment_amount = float(payment['payment_amount']) if payment['payment_amount'] else 0
-                                pdf.cell(0, 10, f"Amount Paid: Rs{format_indian_currency(payment_amount)}", 0, 1)
-                            except:
-                                pdf.cell(0, 10, "Amount Paid: Error calculating", 0, 1)
-                                
-                            try:
-                                interest_amount = float(payment['interest_amount']) if payment['interest_amount'] else 0
-                                pdf.cell(0, 10, f"Interest Paid: Rs{format_indian_currency(interest_amount)}", 0, 1)
-                            except:
-                                pdf.cell(0, 10, "Interest Paid: Error calculating", 0, 1)
-                                
-                            try:
-                                amount_left = float(payment['amount_left']) if payment['amount_left'] else 0
-                                pdf.cell(0, 10, f"Remaining Amount: Rs{format_indian_currency(amount_left)}", 0, 1)
-                            except:
-                                pdf.cell(0, 10, "Remaining Amount: Error calculating", 0, 1)
-                                
-                            pdf.ln(5)
-                    else:
-                        pdf.cell(0, 10, "No payments recorded", 0, 1)
-                except Exception as payment_error:
-                    pdf.cell(0, 10, f"Error retrieving payments: {sanitize_text(str(payment_error))}", 0, 1)
-
-                pdf.ln(10)
-                pdf.cell(0, 0, "_" * 50, 0, 1)  # Add separator line between loans
-
-            # Generate sanitized filename
-            safe_name = ''.join(char for char in str(customer_info.get('name', 'unknown')) if char.isalnum() or char in ' _-')
-            if not safe_name or safe_name.isspace():
-                safe_name = "unknown"
+                ref_id = sanitize_text(str(loan[6])[:12] + "..." if len(str(loan[6])) > 12 else str(loan[6]))
+                assets = sanitize_text(str(loan[1])[:15] + "..." if len(str(loan[1])) > 15 else str(loan[1]))
+                weight = f"{float(loan[2]):.1f}" if loan[2] else "0.0"
+                amount = f"{float(loan[3]):.0f}" if loan[3] else "0"
+                due = f"{float(loan[4]):.0f}" if loan[4] else "0"
                 
-            if self.selected_year:
-                filename = f"customer_loan_report_{safe_name}_{self.selected_year}_{datetime.now().strftime('%Y%m%d')}.pdf"
+                row_data = [formatted_date, ref_id, assets, weight, amount, due]
+                
+                for i, data in enumerate(row_data):
+                    align = 'C' if i in [0, 3, 4, 5] else 'L'  # Center align for date, weight, amounts
+                    pdf.cell(col_widths[i], 7, str(data), 1, 0, align, True)
+                pdf.ln()
+
+            # Footer
+            pdf.ln(10)
+            pdf.set_font('Arial', 'I', 8)
+            pdf.set_text_color(128, 128, 128)
+            pdf.cell(0, 5, f"Report Generated on: {datetime.now().strftime('%d-%m-%Y %H:%M:%S')}", 0, 1, 'C')
+            
+            # Generate filename
+            if customer_info:
+                safe_name = ''.join(char for char in str(customer_info.get('name', 'unknown')) if char.isalnum() or char in ' _-')
+                if not safe_name or safe_name.isspace():
+                    safe_name = "unknown"
+                    
+                if self.selected_year:
+                    filename = f"Loan_Report_{safe_name}_{self.selected_year}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+                else:
+                    filename = f"Loan_Report_{safe_name}_All_Years_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
             else:
-                filename = f"customer_loan_report_{safe_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
+                # All loans report
+                if self.selected_year:
+                    filename = f"All_Loans_Report_{self.selected_year}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+                else:
+                    filename = f"All_Loans_Report_All_Years_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
                 
-            # Replace rupee symbol with "Rs" in the entire document
             try:
                 pdf.output(filename)
-                QMessageBox.information(self, "Success", f"Report generated: {filename}")
+                QMessageBox.information(self, "Success", f"Modern tabular report generated successfully!\n\nFile: {filename}")
             except Exception as output_error:
-                error_msg = str(output_error)
-                QMessageBox.critical(self, "Error", f"Failed to write PDF: {error_msg}")
-                # Try with even safer filename if that was the issue
-                try:
-                    safe_filename = f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-                    pdf.output(safe_filename)
-                    QMessageBox.information(self, "Success", f"Report generated with safe name: {safe_filename}")
-                except Exception as last_error:
-                    QMessageBox.critical(self, "Critical Error", "Cannot generate PDF with any filename. Check file permissions.")
+                # Fallback with safe filename
+                safe_filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+                pdf.output(safe_filename)
+                QMessageBox.information(self, "Success", f"Report generated with safe name: {safe_filename}")
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to generate report: {str(e)}")
