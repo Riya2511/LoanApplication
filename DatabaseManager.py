@@ -836,15 +836,17 @@ class DatabaseManager:
             return float('inf')  # Return infinity if error, to ensure button remains disabled
     
     @staticmethod
-    def fetch_loans_by_year(year=None, limit=None, offset=0):
+    def fetch_loans_by_year(year=None, limit=None, offset=0, start_date=None, end_date=None):
         """
-        Fetch all loans for a given year from all customers with pagination support.
+        Fetch all loans for a given year or date range from all customers with pagination support.
         Date validation is done at the SQL level for better performance.
         
         Args:
             year: Optional year to filter by. If None, returns all loans.
             limit: Optional limit for pagination (number of records to return)
             offset: Optional offset for pagination (number of records to skip)
+            start_date: Optional start date filter (YYYY-MM-DD format)
+            end_date: Optional end date filter (YYYY-MM-DD format)
         
         Returns:
             list: List of loan data from LoanView with customer name, with valid dates
@@ -867,8 +869,12 @@ class DatabaseManager:
             
             params = []
             
-            # Add year filter if specified
-            if year:
+            # Add date range filter if specified (takes precedence over year)
+            if start_date and end_date:
+                base_query += " AND DATE(lv.loan_date) >= DATE(?) AND DATE(lv.loan_date) <= DATE(?)"
+                params.extend([start_date, end_date])
+            elif year:
+                # Add year filter if specified and no date range
                 base_query += " AND strftime('%Y', lv.loan_date) = ?"
                 params.append(str(year))
             
@@ -904,12 +910,47 @@ class DatabaseManager:
                 conn.close()
     
     @staticmethod
-    def get_total_loans_count(year=None):
+    def get_earliest_loan_date():
+        """
+        Get the earliest loan date from the database.
+        
+        Returns:
+            str: Earliest loan date in YYYY-MM-DD format, or None if no loans
+        """
+        try:
+            conn = DatabaseManager.create_connection()
+            cursor = conn.cursor()
+            
+            query = """
+                SELECT MIN(created_at) 
+                FROM Loans 
+                WHERE created_at IS NOT NULL 
+                AND created_at != ''
+            """
+            
+            cursor.execute(query)
+            result = cursor.fetchone()
+            
+            if result and result[0]:
+                return result[0]
+            return None
+        
+        except sqlite3.Error as e:
+            print(f"Database error while fetching earliest loan date: {e}")
+            return None
+        finally:
+            if conn:
+                conn.close()
+    
+    @staticmethod
+    def get_total_loans_count(year=None, start_date=None, end_date=None):
         """
         Get the total count of loans for pagination.
         
         Args:
             year: Optional year to filter by. If None, counts all loans.
+            start_date: Optional start date filter (YYYY-MM-DD format)
+            end_date: Optional end date filter (YYYY-MM-DD format)
         
         Returns:
             int: Total number of loans
@@ -926,7 +967,12 @@ class DatabaseManager:
             """
             
             params = []
-            if year:
+            
+            # Add date range filter if specified (takes precedence over year)
+            if start_date and end_date:
+                query += " AND DATE(lv.loan_date) >= DATE(?) AND DATE(lv.loan_date) <= DATE(?)"
+                params.extend([start_date, end_date])
+            elif year:
                 query += " AND strftime('%Y', lv.loan_date) = ?"
                 params.append(str(year))
             

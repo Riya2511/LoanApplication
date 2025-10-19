@@ -1,8 +1,8 @@
-from PyQt5.QtCore import QEvent, Qt
+from PyQt5.QtCore import QEvent, Qt, QDate
 from PyQt5.QtWidgets import (
     QTableWidget, QTableWidgetItem, QVBoxLayout, QHBoxLayout, 
     QPushButton, QLabel, QGroupBox, QMessageBox, QComboBox, 
-    QLineEdit, QFormLayout
+    QLineEdit, QFormLayout, QDateEdit
 )
 from helper import StyledWidget, format_indian_currency
 from DatabaseManager import DatabaseManager
@@ -27,6 +27,10 @@ class GenerateReport(StyledWidget):
         self.total_loans = 0
         self.all_loans_cache = []  # Cache for filtered loans (for search)
         
+        # Date range variables
+        self.start_date = None
+        self.end_date = None
+        
         self.init_ui()
         
         # Hide elements initially
@@ -35,10 +39,13 @@ class GenerateReport(StyledWidget):
         self.generate_pdf_button.setEnabled(False)
 
     def init_ui(self):
-        # Year Selection
+        # Year Selection and Date Range
         year_layout = QHBoxLayout()
+        
+        # Year Dropdown
+        year_layout.addWidget(QLabel("Select Year:"))
         self.year_dropdown = QComboBox()
-        self.year_dropdown.setFixedWidth(200)
+        self.year_dropdown.setFixedWidth(150)
         self.year_dropdown.setStyleSheet("""
             QComboBox {
                 font-size: 16px;
@@ -59,12 +66,113 @@ class GenerateReport(StyledWidget):
         for year in range(current_year, current_year - 10, -1):
             self.year_dropdown.addItem(str(year), year)
         
-        year_layout.addWidget(QLabel("Select Year:"))
         year_layout.addWidget(self.year_dropdown)
-        year_layout.addStretch(1)
         
         # Connect year selection change
         self.year_dropdown.currentIndexChanged.connect(self.on_year_selected)
+        
+        year_layout.addSpacing(30)
+        
+        # Start Date
+        year_layout.addWidget(QLabel("Start Date:"))
+        self.start_date_edit = QDateEdit()
+        self.start_date_edit.setCalendarPopup(True)
+        self.start_date_edit.setDisplayFormat("dd-MM-yyyy")
+        self.start_date_edit.setFixedWidth(130)
+        self.start_date_edit.setStyleSheet("""
+            QDateEdit {
+                font-size: 14px;
+            }
+            QCalendarWidget QToolButton {
+                color: black;
+                background-color: white;
+                padding: 5px;
+                margin: 3px;
+            }
+            QCalendarWidget QMenu {
+                color: black;
+                background-color: white;
+            }
+            QCalendarWidget QSpinBox {
+                color: black;
+            }
+            QCalendarWidget QWidget {
+                alternate-background-color: rgb(240, 240, 240);
+            }
+            QCalendarWidget QAbstractItemView:enabled {
+                color: black;
+                background-color: white;
+                selection-background-color: rgb(64, 64, 64);
+                selection-color: white;
+            }
+        """)
+        
+        # Get earliest loan date from database, default to 10 years ago if none
+        earliest_date_str = DatabaseManager.get_earliest_loan_date()
+        if earliest_date_str:
+            try:
+                earliest_date = datetime.strptime(earliest_date_str.split()[0], "%Y-%m-%d")
+                self.start_date_edit.setDate(QDate(earliest_date.year, earliest_date.month, earliest_date.day))
+                self.start_date = earliest_date_str.split()[0]  # Store in YYYY-MM-DD format
+            except:
+                # Fallback to 10 years ago
+                fallback_date = QDate.currentDate().addYears(-10)
+                self.start_date_edit.setDate(fallback_date)
+                self.start_date = fallback_date.toString("yyyy-MM-dd")
+        else:
+            # Default to 10 years ago if no loans
+            fallback_date = QDate.currentDate().addYears(-10)
+            self.start_date_edit.setDate(fallback_date)
+            self.start_date = fallback_date.toString("yyyy-MM-dd")
+        
+        self.start_date_edit.dateChanged.connect(self.on_date_range_changed)
+        year_layout.addWidget(self.start_date_edit)
+        
+        year_layout.addSpacing(10)
+        
+        # End Date
+        year_layout.addWidget(QLabel("End Date:"))
+        self.end_date_edit = QDateEdit()
+        self.end_date_edit.setCalendarPopup(True)
+        self.end_date_edit.setDisplayFormat("dd-MM-yyyy")
+        self.end_date_edit.setFixedWidth(130)
+        self.end_date_edit.setStyleSheet("""
+            QDateEdit {
+                font-size: 14px;
+            }
+            QCalendarWidget QToolButton {
+                color: black;
+                background-color: white;
+                padding: 5px;
+                margin: 3px;
+            }
+            QCalendarWidget QMenu {
+                color: black;
+                background-color: white;
+            }
+            QCalendarWidget QSpinBox {
+                color: black;
+            }
+            QCalendarWidget QWidget {
+                alternate-background-color: rgb(240, 240, 240);
+            }
+            QCalendarWidget QAbstractItemView:enabled {
+                color: black;
+                background-color: white;
+                selection-background-color: rgb(64, 64, 64);
+                selection-color: white;
+            }
+        """)
+        
+        # Set to today's date
+        today = QDate.currentDate()
+        self.end_date_edit.setDate(today)
+        self.end_date = today.toString("yyyy-MM-dd")
+        
+        self.end_date_edit.dateChanged.connect(self.on_date_range_changed)
+        year_layout.addWidget(self.end_date_edit)
+        
+        year_layout.addStretch(1)
         
         self.content_layout.addLayout(year_layout)
 
@@ -337,6 +445,36 @@ class GenerateReport(StyledWidget):
         # Block signals temporarily to prevent cascading calls
         self.customer_dropdown.blockSignals(True)
         self.customer_search.blockSignals(True)
+        self.start_date_edit.blockSignals(True)
+        self.end_date_edit.blockSignals(True)
+        
+        # Update date range based on year selection
+        if self.selected_year:
+            # Set date range to the selected year
+            self.start_date_edit.setDate(QDate(self.selected_year, 1, 1))
+            self.end_date_edit.setDate(QDate(self.selected_year, 12, 31))
+            self.start_date = f"{self.selected_year}-01-01"
+            self.end_date = f"{self.selected_year}-12-31"
+        else:
+            # Reset to full range (earliest to today)
+            earliest_date_str = DatabaseManager.get_earliest_loan_date()
+            if earliest_date_str:
+                try:
+                    earliest_date = datetime.strptime(earliest_date_str.split()[0], "%Y-%m-%d")
+                    self.start_date_edit.setDate(QDate(earliest_date.year, earliest_date.month, earliest_date.day))
+                    self.start_date = earliest_date_str.split()[0]
+                except:
+                    fallback_date = QDate.currentDate().addYears(-10)
+                    self.start_date_edit.setDate(fallback_date)
+                    self.start_date = fallback_date.toString("yyyy-MM-dd")
+            else:
+                fallback_date = QDate.currentDate().addYears(-10)
+                self.start_date_edit.setDate(fallback_date)
+                self.start_date = fallback_date.toString("yyyy-MM-dd")
+            
+            today = QDate.currentDate()
+            self.end_date_edit.setDate(today)
+            self.end_date = today.toString("yyyy-MM-dd")
         
         # Reset customer selection
         self.customer_dropdown.setCurrentIndex(0)
@@ -347,6 +485,8 @@ class GenerateReport(StyledWidget):
         # Re-enable signals
         self.customer_dropdown.blockSignals(False)
         self.customer_search.blockSignals(False)
+        self.start_date_edit.blockSignals(False)
+        self.end_date_edit.blockSignals(False)
         
         # Update summary data for selected year
         self.refresh_summary_data()
@@ -361,6 +501,36 @@ class GenerateReport(StyledWidget):
         self.current_page = 1
         self.all_loans_cache = []
         self.populate_loans_table()
+    
+    def on_date_range_changed(self):
+        """Handle date range change"""
+        # Update stored date values
+        self.start_date = self.start_date_edit.date().toString("yyyy-MM-dd")
+        self.end_date = self.end_date_edit.date().toString("yyyy-MM-dd")
+        
+        # Validate date range
+        if self.start_date > self.end_date:
+            QMessageBox.warning(self, "Invalid Date Range", "Start date cannot be after end date!")
+            # Reset end date to start date
+            self.end_date_edit.setDate(self.start_date_edit.date())
+            self.end_date = self.start_date
+            return
+        
+        # Block year dropdown signal
+        self.year_dropdown.blockSignals(True)
+        # Reset year selection when date range changes
+        self.year_dropdown.setCurrentIndex(0)
+        self.selected_year = None
+        self.year_dropdown.blockSignals(False)
+        
+        # Reset pagination and refresh data
+        self.current_page = 1
+        self.all_loans_cache = []
+        
+        # Refresh summary and loans
+        self.refresh_summary_data()
+        if not self.selected_customer_id:
+            self.populate_loans_table()
 
     def on_rows_per_page_changed(self, value):
         """Handle rows per page selection change"""
@@ -675,7 +845,11 @@ class GenerateReport(StyledWidget):
         if search_text:
             # Use cache if available, otherwise fetch all
             if not self.all_loans_cache:
-                self.all_loans_cache = DatabaseManager.fetch_loans_by_year(self.selected_year)
+                self.all_loans_cache = DatabaseManager.fetch_loans_by_year(
+                    year=self.selected_year,
+                    start_date=self.start_date,
+                    end_date=self.end_date
+                )
             
             # Filter by customer name
             filtered_loans = [
@@ -692,16 +866,22 @@ class GenerateReport(StyledWidget):
             loans_to_display = filtered_loans[start_idx:end_idx]
         else:
             # No search filter - use database pagination for better performance
-            self.total_loans = DatabaseManager.get_total_loans_count(self.selected_year)
+            self.total_loans = DatabaseManager.get_total_loans_count(
+                year=self.selected_year,
+                start_date=self.start_date,
+                end_date=self.end_date
+            )
             
             # Calculate offset for pagination
             offset = (self.current_page - 1) * self.rows_per_page
             
             # Fetch only the current page's data from database
             loans_to_display = DatabaseManager.fetch_loans_by_year(
-                self.selected_year, 
+                year=self.selected_year, 
                 limit=self.rows_per_page, 
-                offset=offset
+                offset=offset,
+                start_date=self.start_date,
+                end_date=self.end_date
             )
             
             # Clear cache when not searching
