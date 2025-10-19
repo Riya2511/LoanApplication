@@ -258,17 +258,32 @@ class GenerateReport(StyledWidget):
     def on_year_selected(self):
         """Handle year selection change"""
         self.selected_year = self.year_dropdown.currentData()
+        
+        # Block signals temporarily to prevent cascading calls
+        self.customer_dropdown.blockSignals(True)
+        self.customer_search.blockSignals(True)
+        
         # Reset customer selection
         self.customer_dropdown.setCurrentIndex(0)
+        self.selected_customer_id = None
+        # Clear search text
+        self.customer_search.clear()
+        
+        # Re-enable signals
+        self.customer_dropdown.blockSignals(False)
+        self.customer_search.blockSignals(False)
+        
         # Update summary data for selected year
         self.refresh_summary_data()
         # Update customer dropdown with customers from selected year
         self.populate_customer_dropdown()
-        # Hide customer info and loan details
+        # Hide customer info but show loan details table with all loans
         self.customer_info_group.setVisible(False)
-        self.loan_details_table.setVisible(False)
+        self.loan_details_table.setVisible(True)
         self.update_group.setVisible(False)
         self.generate_pdf_button.setEnabled(False)
+        # Show all loans for the selected year
+        self.populate_loans_table()
 
     def refresh_summary_data(self):
         """Refresh the summary statistics for total customers and loan amount due."""
@@ -295,11 +310,11 @@ class GenerateReport(StyledWidget):
         repayments = DatabaseManager.fetch_loan_payments(loan_id)
         
         if repayments:
-            repayments = sorted(repayments, key=lambda payment: datetime.strptime(str(payment['payment_date']).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d"), reverse=True)
+            repayments = sorted(repayments, key=lambda payment: datetime.strptime(str(payment['payment_date']).replace('00:00:00', '').replace(' ', ''), "%d-%m-%Y"), reverse=True)
             for row_idx, repayment in enumerate(repayments):
                 self.loan_payments_table.insertRow(row_idx)
-                
-                payment_date = datetime.strptime(repayment['payment_date'].replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d")
+
+                payment_date = datetime.strptime(repayment['payment_date'].replace('00:00:00', '').replace(' ', ''), "%d-%m-%Y")
                 formatted_date = payment_date.strftime("%d-%m-%Y")
                 
                 self.loan_payments_table.setItem(row_idx, 0, QTableWidgetItem(formatted_date))
@@ -328,19 +343,43 @@ class GenerateReport(StyledWidget):
     def showEvent(self, event: QEvent):
         """Handle page load event and refresh customer data."""
         if event.type() == QEvent.Show:
+            # Block signals temporarily to prevent cascading calls
+            self.year_dropdown.blockSignals(True)
+            self.customer_dropdown.blockSignals(True)
+            self.customer_search.blockSignals(True)
+            
             # Reset year selection to All Years
             self.year_dropdown.setCurrentIndex(0)
+            self.selected_year = None
             self.populate_customer_dropdown()
-            # Reset selection and hide elements
+            # Reset selection
             self.customer_dropdown.setCurrentIndex(0)
+            self.selected_customer_id = None
+            self.customer_search.clear()
+            
+            # Re-enable signals
+            self.year_dropdown.blockSignals(False)
+            self.customer_dropdown.blockSignals(False)
+            self.customer_search.blockSignals(False)
+            
+            # Hide customer info but show loan details table with all loans
             self.customer_info_group.setVisible(False)
-            self.loan_details_table.setVisible(False)
+            self.loan_details_table.setVisible(True)
             self.update_group.setVisible(False)
             self.generate_pdf_button.setEnabled(False)
+            
+            # Refresh summary data
+            self.refresh_summary_data()
+            
+            # Show all loans initially
+            self.populate_loans_table()
         super().showEvent(event)
 
     def populate_customer_dropdown(self):
         """Populate the dropdown with the latest customer data."""
+        # Block signals to prevent triggering on_customer_selected during dropdown update
+        self.customer_dropdown.blockSignals(True)
+        
         self.customer_dropdown.clear()
         # Add the initial placeholder
         self.customer_dropdown.addItem("Select a customer", None)
@@ -349,9 +388,15 @@ class GenerateReport(StyledWidget):
         if customers:
             for customer_id, name, account_number in customers:
                 self.customer_dropdown.addItem(f"{name}", customer_id)
+        
+        # Re-enable signals
+        self.customer_dropdown.blockSignals(False)
 
     def filter_customers(self, text):
         """Filter customers based on search text."""
+        # Block signals to prevent triggering on_customer_selected during dropdown update
+        self.customer_dropdown.blockSignals(True)
+        
         self.customer_dropdown.clear()
         # Always add the initial placeholder
         self.customer_dropdown.addItem("Select a customer", None)
@@ -368,6 +413,13 @@ class GenerateReport(StyledWidget):
                 self.customer_dropdown.addItem(f"{name} - {account_number}" if account_number else f"{name}", customer_id)
             if len(filtered_customers) == 1:
                 self.customer_dropdown.setCurrentIndex(1)  # First item after "Select Customer"
+        
+        # Re-enable signals
+        self.customer_dropdown.blockSignals(False)
+        
+        # If no customer is selected, refresh the all loans view with the search filter
+        if not self.selected_customer_id:
+            self.populate_loans_table()
 
     def on_customer_selected(self, index):
         """Display customer information and loans when a customer is selected."""
@@ -376,17 +428,21 @@ class GenerateReport(StyledWidget):
         # Show/hide elements based on selection
         has_selection = self.selected_customer_id is not None
         self.customer_info_group.setVisible(has_selection)
-        self.loan_details_table.setVisible(has_selection)
+        
+        # Always show loan details table
+        self.loan_details_table.setVisible(True)
+        
+        # Only enable PDF generation if customer is selected
         self.generate_pdf_button.setEnabled(has_selection)
         
-        # Clear tables if no selection
-        if not has_selection:
-            self.loan_details_table.setRowCount(0)
-            self.update_group.setVisible(False)
-            return
-            
-        # Populate data if customer is selected
-        self.populate_customer_info()
+        # Hide the detail section when changing selection
+        self.update_group.setVisible(False)
+        
+        if has_selection:
+            # Populate data if customer is selected
+            self.populate_customer_info()
+        
+        # Always populate loans table (will show all loans or customer loans based on selection)
         self.populate_loans_table()
 
     def populate_customer_info(self):
@@ -418,17 +474,39 @@ class GenerateReport(StyledWidget):
                 customer_info_layout.addWidget(label)
 
     def populate_loans_table(self):
-        """Populate the loan table with loans for the selected customer."""
+        """Populate the loan table with loans for the selected customer or all loans."""
         self.loan_details_table.setRowCount(0)  # Clear existing rows
         
-        if not self.selected_customer_id:
-            return
-            
+        # Determine if we're showing all loans or customer-specific loans
+        if self.selected_customer_id:
+            # Show loans for specific customer
+            self.show_customer_loans()
+        else:
+            # Show all loans from the database (filtered by year if selected)
+            self.show_all_loans()
+    
+    def show_customer_loans(self):
+        """Show loans for the selected customer."""
+        # Update table to remove customer name column if present
+        if self.loan_details_table.columnCount() == 8:
+            self.loan_details_table.setColumnCount(7)
+            self.loan_details_table.setHorizontalHeaderLabels([
+                "Loan Date", "Registered Reference Id", "Total Assets", "Total Weight (g)", 
+                "Total Amount (₹)", "Amount Due (₹)", ""
+            ])
+            self.loan_details_table.setColumnWidth(1, 200)
+            self.loan_details_table.setColumnWidth(2, 150)
+            self.loan_details_table.setColumnWidth(3, 150)
+            self.loan_details_table.setColumnWidth(4, 150)
+            self.loan_details_table.setColumnWidth(5, 150)
+            self.loan_details_table.setColumnWidth(6, 150)
+        
         # Get loans filtered by year if selected
         loans = DatabaseManager.fetch_loans_for_customer_to_generate_report(self.selected_customer_id, self.selected_year)
         
         if not loans:
             return
+            
         loans = sorted(loans, key=lambda loan: datetime.strptime(str(loan[0]).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d"), reverse=True)
         for row_idx, loan in enumerate(loans):
             self.loan_details_table.insertRow(row_idx)
@@ -452,6 +530,75 @@ class GenerateReport(StyledWidget):
             view_button = QPushButton("View More")
             view_button.clicked.connect(lambda checked, lid=loan[7]: self.show_loan_details(lid))
             self.loan_details_table.setCellWidget(row_idx, 6, view_button)
+    
+    def show_all_loans(self):
+        """Show all loans from the database (filtered by year if selected)."""
+        # Update table to add customer name column
+        if self.loan_details_table.columnCount() == 7:
+            self.loan_details_table.setColumnCount(8)
+            self.loan_details_table.setHorizontalHeaderLabels([
+                "Customer Name", "Loan Date", "Registered Reference Id", "Total Assets", 
+                "Total Weight (g)", "Total Amount (₹)", "Amount Due (₹)", ""
+            ])
+            self.loan_details_table.setColumnWidth(0, 150)
+            self.loan_details_table.setColumnWidth(1, 120)
+            self.loan_details_table.setColumnWidth(2, 180)
+            self.loan_details_table.setColumnWidth(3, 150)
+            self.loan_details_table.setColumnWidth(4, 120)
+            self.loan_details_table.setColumnWidth(5, 120)
+            self.loan_details_table.setColumnWidth(6, 120)
+            self.loan_details_table.setColumnWidth(7, 100)
+        
+        # Get all loans (filtered by year if selected)
+        all_loans = DatabaseManager.fetch_loans_by_year(self.selected_year)
+        
+        if not all_loans:
+            return
+        
+        # Filter by customer search if there's search text
+        search_text = self.customer_search.text().lower()
+        if search_text:
+            filtered_loans = [
+                loan for loan in all_loans 
+                if search_text in loan[9].lower()  # loan[9] is customer_name
+            ]
+        else:
+            filtered_loans = all_loans
+        
+        # Sort by date
+        filtered_loans = sorted(
+            filtered_loans, 
+            key=lambda loan: datetime.strptime(str(loan[0]).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d"), 
+            reverse=True
+        )
+        
+        for row_idx, loan in enumerate(filtered_loans):
+            self.loan_details_table.insertRow(row_idx)
+            
+            # Format the loan data for display
+            # loan structure: (loan_date, asset_descriptions, total_asset_weight, loan_amount, 
+            #                  loan_amount_due, total_interest_amount, registered_reference_id, 
+            #                  loan_id, customer_id, customer_name)
+            customer_name = loan[9]
+            loan_date = datetime.strptime((loan[0]).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d").strftime("%d-%m-%Y")
+            registered_reference_id = loan[6]
+            asset_descriptions = loan[1]
+            total_weight = f"{format_indian_currency(float(loan[2]))}" if loan[2] else "0.00"
+            loan_amount = f"{format_indian_currency(float(loan[3]))}" if loan[3] else "0.00"
+            amount_due = f"{format_indian_currency(float(loan[4]))}" if loan[4] else "0.00"
+            
+            # Set values in the table
+            self.loan_details_table.setItem(row_idx, 0, QTableWidgetItem(customer_name))
+            self.loan_details_table.setItem(row_idx, 1, QTableWidgetItem(loan_date))
+            self.loan_details_table.setItem(row_idx, 2, QTableWidgetItem(registered_reference_id))
+            self.loan_details_table.setItem(row_idx, 3, QTableWidgetItem(asset_descriptions))
+            self.loan_details_table.setItem(row_idx, 4, QTableWidgetItem(total_weight))
+            self.loan_details_table.setItem(row_idx, 5, QTableWidgetItem(loan_amount))
+            self.loan_details_table.setItem(row_idx, 6, QTableWidgetItem(amount_due))
+            
+            view_button = QPushButton("View More")
+            view_button.clicked.connect(lambda checked, lid=loan[7]: self.show_loan_details(lid))
+            self.loan_details_table.setCellWidget(row_idx, 7, view_button)
 
     def generate_pdf_report(self):
         """Generate a comprehensive PDF report for the selected customer."""

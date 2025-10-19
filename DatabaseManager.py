@@ -528,32 +528,32 @@ class DatabaseManager:
         """
         return DatabaseManager.execute_query(query, (loan_date, registered_reference_id, loan_amount, loan_id))
 
-    @staticmethod
-    def fetch_loan_details_to_edit(loan_id):
-        """Fetches loan details for a given loan ID."""
-        query = """
-        SELECT loan_date, registered_reference_id, loan_amount
-        FROM LoanView
-        WHERE loan_id = ?
-        """
-        try: 
-            conn = DatabaseManager.create_connection()
-            cursor = conn.cursor()
+    # @staticmethod
+    # def fetch_loan_details_to_edit(loan_id):
+    #     """Fetches loan details for a given loan ID."""
+    #     query = """
+    #     SELECT loan_date, registered_reference_id, loan_amount
+    #     FROM LoanView
+    #     WHERE loan_id = ?
+    #     """
+    #     try: 
+    #         conn = DatabaseManager.create_connection()
+    #         cursor = conn.cursor()
 
-            cursor.execute(query, (loan_id, ))
-            result = cursor.fetchone()[0]
-            if result:
-                return {
-                    "loan_date": result[0],
-                    "registered_reference_id": result[1],
-                    "loan_amount_left": result[2]
-                }
-        except sqlite3.Error as e:
-            print(f"Database error while fetching load details to edit: {e}")
-            return None
-        finally:
-            if conn:
-                conn.close()
+    #         cursor.execute(query, (loan_id, ))
+    #         result = cursor.fetchone()[0]
+    #         if result:
+    #             return {
+    #                 "loan_date": result[0],
+    #                 "registered_reference_id": result[1],
+    #                 "loan_amount_left": result[2]
+    #             }
+    #     except sqlite3.Error as e:
+    #         print(f"Database error while fetching load details to edit: {e}")
+    #         return None
+    #     finally:
+    #         if conn:
+    #             conn.close()
     
     @staticmethod
     def fetch_loan_details_to_edit(loan_id):
@@ -834,3 +834,74 @@ class DatabaseManager:
         except Exception as e:
             print(f"Error fetching loan amount due: {e}")
             return float('inf')  # Return infinity if error, to ensure button remains disabled
+    
+    @staticmethod
+    def fetch_loans_by_year(year=None):
+        """
+        Fetch all loans for a given year from all customers.
+        If the date of any loan is not in the correct format, skip it and print a warning.
+        
+        Args:
+            year: Optional year to filter by. If None, returns all loans.
+        
+        Returns:
+            list: List of loan data from LoanView with customer name, with valid dates
+            Format: (loan_date, asset_descriptions, total_asset_weight, loan_amount, 
+                     loan_amount_due, total_interest_amount, registered_reference_id, 
+                     loan_id, customer_id, customer_name)
+        """
+        try:
+            conn = DatabaseManager.create_connection()
+            cursor = conn.cursor()
+            
+            if year:
+                # Get all loans for the specified year with customer name
+                query = """
+                    SELECT lv.*, c.name as customer_name
+                    FROM LoanView lv
+                    JOIN Customers c ON lv.customer_id = c.customer_id
+                    WHERE strftime('%Y', lv.loan_date) = ?
+                    ORDER BY lv.loan_date DESC
+                """
+                cursor.execute(query, (str(year),))
+            else:
+                # Get all loans regardless of year with customer name
+                query = """
+                    SELECT lv.*, c.name as customer_name
+                    FROM LoanView lv
+                    JOIN Customers c ON lv.customer_id = c.customer_id
+                    ORDER BY lv.loan_date DESC
+                """
+                cursor.execute(query)
+            
+            all_loans = cursor.fetchall()
+            valid_loans = []
+            
+            # Validate each loan's date format
+            for loan in all_loans:
+                loan_date = loan[0]  # loan_date is the first column in LoanView
+                try:
+                    # Try to parse the date - if it fails, skip this loan
+                    if loan_date:
+                        # Attempt to parse the date in various formats
+                        loan_date_str = str(loan_date).replace('00:00:00', '').strip()
+                        from datetime import datetime
+                        datetime.strptime(loan_date_str, "%Y-%m-%d")
+                        valid_loans.append(loan)
+                    else:
+                        print(f"WARNING: Loan ID {loan[7]} has NULL date, skipping...")
+                except ValueError as e:
+                    print(f"WARNING: Loan ID {loan[7]} has invalid date format '{loan_date}', skipping... Error: {e}")
+                except Exception as e:
+                    print(f"WARNING: Loan ID {loan[7]} encountered error during date validation, skipping... Error: {e}")
+            
+            return valid_loans
+        
+        except sqlite3.Error as e:
+            print(f"Database error while fetching loans by year: {e}")
+            return []
+        finally:
+            if conn:
+                conn.close()
+        
+    
