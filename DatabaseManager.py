@@ -836,13 +836,15 @@ class DatabaseManager:
             return float('inf')  # Return infinity if error, to ensure button remains disabled
     
     @staticmethod
-    def fetch_loans_by_year(year=None):
+    def fetch_loans_by_year(year=None, limit=None, offset=0):
         """
-        Fetch all loans for a given year from all customers.
-        If the date of any loan is not in the correct format, skip it and print a warning.
+        Fetch all loans for a given year from all customers with pagination support.
+        Date validation is done at the SQL level for better performance.
         
         Args:
             year: Optional year to filter by. If None, returns all loans.
+            limit: Optional limit for pagination (number of records to return)
+            offset: Optional offset for pagination (number of records to skip)
         
         Returns:
             list: List of loan data from LoanView with customer name, with valid dates
@@ -854,52 +856,87 @@ class DatabaseManager:
             conn = DatabaseManager.create_connection()
             cursor = conn.cursor()
             
+            # Base query with date validation at SQL level
+            base_query = """
+                SELECT lv.*, c.name as customer_name
+                FROM LoanView lv
+                JOIN Customers c ON lv.customer_id = c.customer_id
+                WHERE lv.loan_date IS NOT NULL 
+                AND lv.loan_date != ''
+            """
+            
+            params = []
+            
+            # Add year filter if specified
             if year:
-                # Get all loans for the specified year with customer name
-                query = """
-                    SELECT lv.*, c.name as customer_name
-                    FROM LoanView lv
-                    JOIN Customers c ON lv.customer_id = c.customer_id
-                    WHERE strftime('%Y', lv.loan_date) = ?
-                    ORDER BY lv.loan_date DESC
-                """
-                cursor.execute(query, (str(year),))
-            else:
-                # Get all loans regardless of year with customer name
-                query = """
-                    SELECT lv.*, c.name as customer_name
-                    FROM LoanView lv
-                    JOIN Customers c ON lv.customer_id = c.customer_id
-                    ORDER BY lv.loan_date DESC
-                """
-                cursor.execute(query)
+                base_query += " AND strftime('%Y', lv.loan_date) = ?"
+                params.append(str(year))
             
-            all_loans = cursor.fetchall()
+            # Add ordering
+            base_query += " ORDER BY lv.loan_date DESC"
+            
+            # Add pagination if limit is specified
+            if limit is not None:
+                base_query += " LIMIT ? OFFSET ?"
+                params.extend([limit, offset])
+            
+            cursor.execute(base_query, params)
+            loans = cursor.fetchall()
+            
+            # Minimal validation - just check if date can be parsed
             valid_loans = []
-            
-            # Validate each loan's date format
-            for loan in all_loans:
-                loan_date = loan[0]  # loan_date is the first column in LoanView
+            for loan in loans:
                 try:
-                    # Try to parse the date - if it fails, skip this loan
-                    if loan_date:
-                        # Attempt to parse the date in various formats
-                        loan_date_str = str(loan_date).replace('00:00:00', '').strip()
-                        from datetime import datetime
-                        datetime.strptime(loan_date_str, "%Y-%m-%d")
-                        valid_loans.append(loan)
-                    else:
-                        print(f"WARNING: Loan ID {loan[7]} has NULL date, skipping...")
-                except ValueError as e:
-                    print(f"WARNING: Loan ID {loan[7]} has invalid date format '{loan_date}', skipping... Error: {e}")
-                except Exception as e:
-                    print(f"WARNING: Loan ID {loan[7]} encountered error during date validation, skipping... Error: {e}")
+                    loan_date_str = str(loan[0]).replace('00:00:00', '').strip()
+                    from datetime import datetime
+                    datetime.strptime(loan_date_str, "%Y-%m-%d")
+                    valid_loans.append(loan)
+                except (ValueError, Exception) as e:
+                    print(f"WARNING: Loan ID {loan[7]} has invalid date format '{loan[0]}', skipping... Error: {e}")
             
             return valid_loans
         
         except sqlite3.Error as e:
             print(f"Database error while fetching loans by year: {e}")
             return []
+        finally:
+            if conn:
+                conn.close()
+    
+    @staticmethod
+    def get_total_loans_count(year=None):
+        """
+        Get the total count of loans for pagination.
+        
+        Args:
+            year: Optional year to filter by. If None, counts all loans.
+        
+        Returns:
+            int: Total number of loans
+        """
+        try:
+            conn = DatabaseManager.create_connection()
+            cursor = conn.cursor()
+            
+            query = """
+                SELECT COUNT(*) 
+                FROM LoanView lv
+                WHERE lv.loan_date IS NOT NULL 
+                AND lv.loan_date != ''
+            """
+            
+            params = []
+            if year:
+                query += " AND strftime('%Y', lv.loan_date) = ?"
+                params.append(str(year))
+            
+            cursor.execute(query, params)
+            count = cursor.fetchone()[0]
+            return count
+        
+        except sqlite3.Error as e:
+            print(f"Database error while counting loans: {e}")
+            return 0
         finally:
             if conn:
                 conn.close()

@@ -20,6 +20,13 @@ class GenerateReport(StyledWidget):
         self.assets_table = None
         self.loan_payments_table = None
         self.selected_year = None
+        
+        # Pagination variables
+        self.current_page = 1
+        self.rows_per_page = 50
+        self.total_loans = 0
+        self.all_loans_cache = []  # Cache for filtered loans (for search)
+        
         self.init_ui()
         
         # Hide elements initially
@@ -193,6 +200,74 @@ class GenerateReport(StyledWidget):
         self.loan_details_table.setFixedHeight(200)
         self.content_layout.addWidget(self.loan_details_table)
 
+        # Pagination Controls
+        pagination_layout = QHBoxLayout()
+        pagination_layout.addStretch(1)
+        
+        # Rows per page selector
+        pagination_layout.addWidget(QLabel("Rows per page:"))
+        self.rows_per_page_combo = QComboBox()
+        self.rows_per_page_combo.addItems(["10", "20", "50", "100"])
+        self.rows_per_page_combo.setCurrentText("50")  # Default to 50
+        self.rows_per_page_combo.currentTextChanged.connect(self.on_rows_per_page_changed)
+        self.rows_per_page_combo.setFixedWidth(80)
+        pagination_layout.addWidget(self.rows_per_page_combo)
+        
+        pagination_layout.addSpacing(20)
+        
+        # Previous button
+        self.prev_button = QPushButton("◄")
+        self.prev_button.setFixedSize(40, 30)
+        self.prev_button.clicked.connect(self.go_to_previous_page)
+        self.prev_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border-radius: 5px;
+                font-weight: bold;
+                font-size: 16px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666666;
+            }
+        """)
+        pagination_layout.addWidget(self.prev_button)
+        
+        # Page info label
+        self.page_info_label = QLabel("Page 1 of 1")
+        self.page_info_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+        self.page_info_label.setFixedWidth(120)
+        self.page_info_label.setAlignment(Qt.AlignCenter)
+        pagination_layout.addWidget(self.page_info_label)
+        
+        # Next button
+        self.next_button = QPushButton("►")
+        self.next_button.setFixedSize(40, 30)
+        self.next_button.clicked.connect(self.go_to_next_page)
+        self.next_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border-radius: 5px;
+                font-weight: bold;
+                font-size: 16px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666666;
+            }
+        """)
+        pagination_layout.addWidget(self.next_button)
+        
+        self.content_layout.addLayout(pagination_layout)
+
         # Assets and Payments Section (hidden by default)
         self.update_group = QGroupBox("Loan Assets and Payments")
         self.update_group.setVisible(False)
@@ -282,8 +357,46 @@ class GenerateReport(StyledWidget):
         self.loan_details_table.setVisible(True)
         self.update_group.setVisible(False)
         self.generate_pdf_button.setEnabled(False)
-        # Show all loans for the selected year
+        # Reset pagination and show all loans for the selected year
+        self.current_page = 1
+        self.all_loans_cache = []
         self.populate_loans_table()
+
+    def on_rows_per_page_changed(self, value):
+        """Handle rows per page selection change"""
+        self.rows_per_page = int(value)
+        self.current_page = 1  # Reset to first page
+        self.populate_loans_table()
+    
+    def go_to_previous_page(self):
+        """Navigate to the previous page"""
+        if self.current_page > 1:
+            self.current_page -= 1
+            self.populate_loans_table()
+    
+    def go_to_next_page(self):
+        """Navigate to the next page"""
+        total_pages = self.get_total_pages()
+        if self.current_page < total_pages:
+            self.current_page += 1
+            self.populate_loans_table()
+    
+    def get_total_pages(self):
+        """Calculate total number of pages"""
+        if self.rows_per_page == 0:
+            return 1
+        return max(1, (self.total_loans + self.rows_per_page - 1) // self.rows_per_page)
+    
+    def update_pagination_controls(self):
+        """Update pagination button states and labels"""
+        total_pages = self.get_total_pages()
+        
+        # Update page info label
+        self.page_info_label.setText(f"Page {self.current_page} of {total_pages}")
+        
+        # Enable/disable buttons
+        self.prev_button.setEnabled(self.current_page > 1)
+        self.next_button.setEnabled(self.current_page < total_pages)
 
     def refresh_summary_data(self):
         """Refresh the summary statistics for total customers and loan amount due."""
@@ -362,6 +475,10 @@ class GenerateReport(StyledWidget):
             self.customer_dropdown.blockSignals(False)
             self.customer_search.blockSignals(False)
             
+            # Reset pagination
+            self.current_page = 1
+            self.all_loans_cache = []
+            
             # Hide customer info but show loan details table with all loans
             self.customer_info_group.setVisible(False)
             self.loan_details_table.setVisible(True)
@@ -419,6 +536,9 @@ class GenerateReport(StyledWidget):
         
         # If no customer is selected, refresh the all loans view with the search filter
         if not self.selected_customer_id:
+            # Reset to first page when search changes
+            self.current_page = 1
+            self.all_loans_cache = []  # Clear cache to force refresh
             self.populate_loans_table()
 
     def on_customer_selected(self, index):
@@ -532,7 +652,7 @@ class GenerateReport(StyledWidget):
             self.loan_details_table.setCellWidget(row_idx, 6, view_button)
     
     def show_all_loans(self):
-        """Show all loans from the database (filtered by year if selected)."""
+        """Show all loans from the database (filtered by year if selected) with pagination."""
         # Update table to add customer name column
         if self.loan_details_table.columnCount() == 7:
             self.loan_details_table.setColumnCount(8)
@@ -549,30 +669,52 @@ class GenerateReport(StyledWidget):
             self.loan_details_table.setColumnWidth(6, 120)
             self.loan_details_table.setColumnWidth(7, 100)
         
-        # Get all loans (filtered by year if selected)
-        all_loans = DatabaseManager.fetch_loans_by_year(self.selected_year)
-        
-        if not all_loans:
-            return
-        
-        # Filter by customer search if there's search text
         search_text = self.customer_search.text().lower()
+        
+        # If there's a search filter, we need to fetch all and filter in Python
         if search_text:
+            # Use cache if available, otherwise fetch all
+            if not self.all_loans_cache:
+                self.all_loans_cache = DatabaseManager.fetch_loans_by_year(self.selected_year)
+            
+            # Filter by customer name
             filtered_loans = [
-                loan for loan in all_loans 
+                loan for loan in self.all_loans_cache 
                 if search_text in loan[9].lower()  # loan[9] is customer_name
             ]
+            
+            # Update total count for pagination
+            self.total_loans = len(filtered_loans)
+            
+            # Get the page slice
+            start_idx = (self.current_page - 1) * self.rows_per_page
+            end_idx = start_idx + self.rows_per_page
+            loans_to_display = filtered_loans[start_idx:end_idx]
         else:
-            filtered_loans = all_loans
+            # No search filter - use database pagination for better performance
+            self.total_loans = DatabaseManager.get_total_loans_count(self.selected_year)
+            
+            # Calculate offset for pagination
+            offset = (self.current_page - 1) * self.rows_per_page
+            
+            # Fetch only the current page's data from database
+            loans_to_display = DatabaseManager.fetch_loans_by_year(
+                self.selected_year, 
+                limit=self.rows_per_page, 
+                offset=offset
+            )
+            
+            # Clear cache when not searching
+            self.all_loans_cache = []
         
-        # Sort by date
-        filtered_loans = sorted(
-            filtered_loans, 
-            key=lambda loan: datetime.strptime(str(loan[0]).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d"), 
-            reverse=True
-        )
+        # Update pagination controls
+        self.update_pagination_controls()
         
-        for row_idx, loan in enumerate(filtered_loans):
+        if not loans_to_display:
+            return
+        
+        # Display the loans for the current page
+        for row_idx, loan in enumerate(loans_to_display):
             self.loan_details_table.insertRow(row_idx)
             
             # Format the loan data for display
