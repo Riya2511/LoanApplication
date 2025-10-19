@@ -496,7 +496,8 @@ class GenerateReport(StyledWidget):
         self.customer_info_group.setVisible(False)
         self.loan_details_table.setVisible(True)
         self.update_group.setVisible(False)
-        self.generate_pdf_button.setEnabled(False)
+        # Enable PDF button for all loans report
+        self.generate_pdf_button.setEnabled(True)
         # Reset pagination and show all loans for the selected year
         self.current_page = 1
         self.all_loans_cache = []
@@ -653,7 +654,8 @@ class GenerateReport(StyledWidget):
             self.customer_info_group.setVisible(False)
             self.loan_details_table.setVisible(True)
             self.update_group.setVisible(False)
-            self.generate_pdf_button.setEnabled(False)
+            # Enable PDF button for all loans report
+            self.generate_pdf_button.setEnabled(True)
             
             # Refresh summary data
             self.refresh_summary_data()
@@ -722,8 +724,8 @@ class GenerateReport(StyledWidget):
         # Always show loan details table
         self.loan_details_table.setVisible(True)
         
-        # Only enable PDF generation if customer is selected
-        self.generate_pdf_button.setEnabled(has_selection)
+        # Always enable PDF generation (works for both all loans and individual customer)
+        self.generate_pdf_button.setEnabled(True)
         
         # Hide the detail section when changing selection
         self.update_group.setVisible(False)
@@ -923,173 +925,357 @@ class GenerateReport(StyledWidget):
             self.loan_details_table.setCellWidget(row_idx, 7, view_button)
 
     def generate_pdf_report(self):
-        """Generate a comprehensive PDF report for the selected customer."""
-        if not self.selected_customer_id:
-            QMessageBox.warning(self, "Error", "Please select a customer first.")
-            return
+        """Generate a comprehensive PDF report based on current filters."""
+        
+        # Helper function to sanitize text - use ASCII only
+        def sanitize_text(text):
+            if text is None:
+                return "N/A"
+            try:
+                text = str(text)
+                return ''.join(char for char in text if ord(char) < 128)
+            except:
+                return "Text contains unsupported characters"
+        
         try:
-            customer_info = DatabaseManager.get_customer_by_id(self.selected_customer_id)
-            loans = DatabaseManager.fetch_loans_for_customer_to_generate_report(self.selected_customer_id, self.selected_year)
-
             pdf = FPDF()
             pdf.add_page()
-            pdf.set_font('Arial', 'B', 16)
             
-            # Helper function to sanitize text - use ASCII only, completely remove problematic characters
-            def sanitize_text(text):
-                if text is None:
-                    return "N/A"
-                try:
-                    # Convert to string first
-                    text = str(text)
-                    # Remove all non-ASCII characters
-                    return ''.join(char for char in text if ord(char) < 128)
-                except:
-                    # If any error, return safe text
-                    return "Text contains unsupported characters"
-            
-            # Add report title with year filter if applicable
-            if self.selected_year:
-                pdf.cell(0, 10, f"Customer Loan Report ({self.selected_year})", 0, 1)
+            # Determine report type and generate accordingly
+            if self.selected_customer_id:
+                # Scenario 3: Individual customer report
+                self.generate_customer_pdf_report(pdf, sanitize_text)
             else:
-                pdf.cell(0, 10, "Customer Loan Report (All Years)", 0, 1)
-
-            # Customer Information
-            pdf.set_font('Arial', '', 12)
-            pdf.cell(0, 10, f"Name: {sanitize_text(customer_info.get('name', 'N/A'))}", 0, 1)
-            pdf.cell(0, 10, f"Phone: {sanitize_text(customer_info.get('phone', 'N/A'))}", 0, 1)
-            pdf.cell(0, 10, f"Address: {sanitize_text(customer_info.get('address', 'N/A'))}", 0, 1)
-
-            # Loan Details
-            for loan in loans:
-                pdf.ln(10)
-                pdf.set_font('Arial', 'B', 14)
-                pdf.cell(0, 10, "Loan Details", 0, 1)
+                # Scenario 1 & 2: All loans table report
+                self.generate_all_loans_pdf_report(pdf, sanitize_text)
                 
-                pdf.set_font('Arial', '', 12)
-                # Sanitize date format
-                try:
-                    loan_date = datetime.strptime(str(loan[0]).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d")
-                    formatted_date = loan_date.strftime('%d-%m-%Y')
-                except:
-                    formatted_date = "Invalid date"
-                    
-                pdf.cell(0, 10, f"Loan Date: {formatted_date}", 0, 1)
-                pdf.cell(0, 10, f"Registered Reference Id: {sanitize_text(str(loan[6]))}", 0, 1)
-                
-                # Handle numeric values safely
-                try:
-                    weight = float(loan[2]) if loan[2] else 0
-                    pdf.cell(0, 10, f"Total Weight: {weight} g", 0, 1)
-                except:
-                    pdf.cell(0, 10, "Total Weight: Error calculating", 0, 1)
-                    
-                try:
-                    loan_amount = float(loan[3]) if loan[3] else 0
-                    pdf.cell(0, 10, f"Total Loan Amount: Rs{format_indian_currency(loan_amount)}", 0, 1)
-                except:
-                    pdf.cell(0, 10, "Total Loan Amount: Error calculating", 0, 1)
-                    
-                try:
-                    due_amount = float(loan[4]) if loan[4] else 0
-                    pdf.cell(0, 10, f"Amount Due: Rs{format_indian_currency(due_amount)}", 0, 1)
-                except:
-                    pdf.cell(0, 10, "Amount Due: Error calculating", 0, 1)
-
-                # Add assets
-                pdf.ln(5)
-                pdf.set_font('Arial', 'B', 12)
-                pdf.cell(0, 10, "Assets:", 0, 1)
-                try:
-                    assets = DatabaseManager.fetch_loan_assets(loan[7])  # Using loan_id
-                    pdf.set_font('Arial', '', 12)
-                    if assets:
-                        for desc, weight in assets:
-                            pdf.cell(0, 10, f"  Asset Description: {sanitize_text(str(desc))}", 0, 1)
-                            try:
-                                weight_val = float(weight) if weight else 0
-                                pdf.cell(0, 10, f"  Weight: {weight_val}g", 0, 1)
-                            except:
-                                pdf.cell(0, 10, "  Weight: Error calculating", 0, 1)
-                            pdf.ln(2)
-                    else:
-                        pdf.cell(0, 10, "No assets found", 0, 1)
-                except Exception as asset_error:
-                    pdf.cell(0, 10, f"Error retrieving assets: {sanitize_text(str(asset_error))}", 0, 1)
-
-                # Add loan payments
-                pdf.ln(5)
-                pdf.set_font('Arial', 'B', 12)
-                pdf.cell(0, 10, "Payment History:", 0, 1)
-                try:
-                    payments = DatabaseManager.fetch_loan_payments(loan[7])
-                    pdf.set_font('Arial', '', 12)
-                    if payments:
-                        payments = sorted(payments, key=lambda payment: datetime.strptime(str(payment['payment_date']).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d"), reverse=True)
-                        for payment in payments:
-                            try:
-                                payment_date = datetime.strptime(
-                                    str(payment['payment_date']).replace('00:00:00', '').replace(' ', ''), 
-                                    "%Y-%m-%d"
-                                )
-                                formatted_payment_date = payment_date.strftime('%d-%m-%Y')
-                            except:
-                                formatted_payment_date = "Invalid date"
-                                
-                            pdf.cell(0, 10, f"Date: {formatted_payment_date}", 0, 1)
-                            pdf.cell(0, 10, f"Asset: {sanitize_text(str(payment.get('asset_description', 'N/A')))}", 0, 1)
-                            
-                            try:
-                                payment_amount = float(payment['payment_amount']) if payment['payment_amount'] else 0
-                                pdf.cell(0, 10, f"Amount Paid: Rs{format_indian_currency(payment_amount)}", 0, 1)
-                            except:
-                                pdf.cell(0, 10, "Amount Paid: Error calculating", 0, 1)
-                                
-                            try:
-                                interest_amount = float(payment['interest_amount']) if payment['interest_amount'] else 0
-                                pdf.cell(0, 10, f"Interest Paid: Rs{format_indian_currency(interest_amount)}", 0, 1)
-                            except:
-                                pdf.cell(0, 10, "Interest Paid: Error calculating", 0, 1)
-                                
-                            try:
-                                amount_left = float(payment['amount_left']) if payment['amount_left'] else 0
-                                pdf.cell(0, 10, f"Remaining Amount: Rs{format_indian_currency(amount_left)}", 0, 1)
-                            except:
-                                pdf.cell(0, 10, "Remaining Amount: Error calculating", 0, 1)
-                                
-                            pdf.ln(5)
-                    else:
-                        pdf.cell(0, 10, "No payments recorded", 0, 1)
-                except Exception as payment_error:
-                    pdf.cell(0, 10, f"Error retrieving payments: {sanitize_text(str(payment_error))}", 0, 1)
-
-                pdf.ln(10)
-                pdf.cell(0, 0, "_" * 50, 0, 1)  # Add separator line between loans
-
-            # Generate sanitized filename
-            safe_name = ''.join(char for char in str(customer_info.get('name', 'unknown')) if char.isalnum() or char in ' _-')
-            if not safe_name or safe_name.isspace():
-                safe_name = "unknown"
-                
-            if self.selected_year:
-                filename = f"customer_loan_report_{safe_name}_{self.selected_year}_{datetime.now().strftime('%Y%m%d')}.pdf"
-            else:
-                filename = f"customer_loan_report_{safe_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
-                
-            # Replace rupee symbol with "Rs" in the entire document
-            try:
-                pdf.output(filename)
-                QMessageBox.information(self, "Success", f"Report generated: {filename}")
-            except Exception as output_error:
-                error_msg = str(output_error)
-                QMessageBox.critical(self, "Error", f"Failed to write PDF: {error_msg}")
-                # Try with even safer filename if that was the issue
-                try:
-                    safe_filename = f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-                    pdf.output(safe_filename)
-                    QMessageBox.information(self, "Success", f"Report generated with safe name: {safe_filename}")
-                except Exception as last_error:
-                    QMessageBox.critical(self, "Critical Error", "Cannot generate PDF with any filename. Check file permissions.")
-
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to generate report: {str(e)}")
+    
+    def generate_all_loans_pdf_report(self, pdf, sanitize_text):
+        """Generate PDF report with table of all loans (Scenarios 1 & 2)."""
+        
+        # Fetch all loans based on current filters (no pagination for PDF)
+        all_loans = DatabaseManager.fetch_loans_by_year(
+            year=self.selected_year,
+            start_date=self.start_date,
+            end_date=self.end_date
+        )
+        
+        if not all_loans:
+            QMessageBox.warning(self, "No Data", "No loans found for the selected filters.")
+            return
+        
+        # Title based on filters
+        pdf.set_font('Arial', 'B', 18)
+        pdf.cell(0, 12, "LOAN REPORT", 0, 1, 'C')
+        pdf.ln(5)
+        
+        # Filter information
+        pdf.set_font('Arial', 'B', 12)
+        if self.selected_year:
+            pdf.cell(0, 8, f"Year: {self.selected_year}", 0, 1, 'C')
+        else:
+            # Show date range
+            start_display = datetime.strptime(self.start_date, "%Y-%m-%d").strftime("%d-%m-%Y")
+            end_display = datetime.strptime(self.end_date, "%Y-%m-%d").strftime("%d-%m-%Y")
+            pdf.cell(0, 8, f"Date Range: {start_display} to {end_display}", 0, 1, 'C')
+        
+        pdf.ln(3)
+        pdf.set_font('Arial', 'I', 10)
+        pdf.cell(0, 6, f"Generated on: {datetime.now().strftime('%d-%m-%Y %H:%M')}", 0, 1, 'C')
+        pdf.ln(8)
+        
+        # Summary statistics
+        total_loan_amount = sum(float(loan[3]) if loan[3] else 0 for loan in all_loans)
+        total_due_amount = sum(float(loan[4]) if loan[4] else 0 for loan in all_loans)
+        
+        pdf.set_font('Arial', 'B', 11)
+        pdf.cell(0, 7, f"Total Loans: {len(all_loans)}", 0, 1)
+        pdf.cell(0, 7, f"Total Loan Amount: Rs {format_indian_currency(total_loan_amount)}", 0, 1)
+        pdf.cell(0, 7, f"Total Amount Due: Rs {format_indian_currency(total_due_amount)}", 0, 1)
+        pdf.ln(8)
+        
+        # Table header
+        pdf.set_font('Arial', 'B', 9)
+        pdf.set_fill_color(70, 130, 180)  # Steel blue
+        pdf.set_text_color(255, 255, 255)  # White text
+        
+        # Column widths
+        col_widths = [22, 45, 28, 35, 20, 22, 18]
+        headers = ['Date', 'Customer', 'Ref ID', 'Assets', 'Weight(g)', 'Amount', 'Due']
+        
+        for i, header in enumerate(headers):
+            pdf.cell(col_widths[i], 8, header, 1, 0, 'C', True)
+        pdf.ln()
+        
+        # Table data
+        pdf.set_font('Arial', '', 8)
+        pdf.set_text_color(0, 0, 0)  # Black text
+        
+        fill = False
+        for loan in all_loans:
+            # loan structure: (loan_date, asset_descriptions, total_asset_weight, loan_amount, 
+            #                  loan_amount_due, total_interest_amount, registered_reference_id, 
+            #                  loan_id, customer_id, customer_name)
+            
+            try:
+                loan_date = datetime.strptime(str(loan[0]).replace('00:00:00', '').strip(), "%Y-%m-%d").strftime("%d-%m-%Y")
+            except:
+                loan_date = str(loan[0])[:10]
+            
+            customer_name = sanitize_text(loan[9])[:25]  # Truncate if too long
+            ref_id = sanitize_text(str(loan[6]) if loan[6] else "")[:15]
+            assets = sanitize_text(str(loan[1]) if loan[1] else "")[:20]
+            weight = f"{float(loan[2]):.2f}" if loan[2] else "0"
+            amount = format_indian_currency(float(loan[3]) if loan[3] else 0)
+            due = format_indian_currency(float(loan[4]) if loan[4] else 0)
+            
+            # Alternate row colors
+            if fill:
+                pdf.set_fill_color(240, 240, 240)
+            else:
+                pdf.set_fill_color(255, 255, 255)
+            
+            pdf.cell(col_widths[0], 7, loan_date, 1, 0, 'C', True)
+            pdf.cell(col_widths[1], 7, customer_name, 1, 0, 'L', True)
+            pdf.cell(col_widths[2], 7, ref_id, 1, 0, 'L', True)
+            pdf.cell(col_widths[3], 7, assets, 1, 0, 'L', True)
+            pdf.cell(col_widths[4], 7, weight, 1, 0, 'R', True)
+            pdf.cell(col_widths[5], 7, amount, 1, 0, 'R', True)
+            pdf.cell(col_widths[6], 7, due, 1, 0, 'R', True)
+            pdf.ln()
+            
+            fill = not fill
+            
+            # Add new page if needed
+            if pdf.get_y() > 270:
+                pdf.add_page()
+                # Repeat header
+                pdf.set_font('Arial', 'B', 9)
+                pdf.set_fill_color(70, 130, 180)
+                pdf.set_text_color(255, 255, 255)
+                for i, header in enumerate(headers):
+                    pdf.cell(col_widths[i], 8, header, 1, 0, 'C', True)
+                pdf.ln()
+                pdf.set_font('Arial', '', 8)
+                pdf.set_text_color(0, 0, 0)
+        
+        # Generate filename
+        if self.selected_year:
+            filename = f"loan_report_{self.selected_year}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        else:
+            filename = f"loan_report_{self.start_date}_to_{self.end_date}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        
+        try:
+            pdf.output(filename)
+            QMessageBox.information(self, "Success", f"Report generated: {filename}")
+        except Exception as output_error:
+            safe_filename = f"loan_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+            pdf.output(safe_filename)
+            QMessageBox.information(self, "Success", f"Report generated: {safe_filename}")
+    
+    def generate_customer_pdf_report(self, pdf, sanitize_text):
+        """Generate PDF report for individual customer (Scenario 3) with tabular format."""
+        
+        customer_info = DatabaseManager.get_customer_by_id(self.selected_customer_id)
+        loans = DatabaseManager.fetch_loans_for_customer_to_generate_report(
+            self.selected_customer_id, self.selected_year
+        )
+        
+        if not loans:
+            QMessageBox.warning(self, "No Data", "No loans found for this customer.")
+            return
+        
+        # Title
+        pdf.set_font('Arial', 'B', 18)
+        pdf.cell(0, 12, "CUSTOMER LOAN REPORT", 0, 1, 'C')
+        pdf.ln(3)
+        
+        # Filter information
+        pdf.set_font('Arial', 'B', 11)
+        if self.selected_year:
+            pdf.cell(0, 7, f"Year: {self.selected_year}", 0, 1, 'C')
+        else:
+            start_display = datetime.strptime(self.start_date, "%Y-%m-%d").strftime("%d-%m-%Y")
+            end_display = datetime.strptime(self.end_date, "%Y-%m-%d").strftime("%d-%m-%Y")
+            pdf.cell(0, 7, f"Date Range: {start_display} to {end_display}", 0, 1, 'C')
+        
+        pdf.ln(2)
+        pdf.set_font('Arial', 'I', 10)
+        pdf.cell(0, 6, f"Generated on: {datetime.now().strftime('%d-%m-%Y %H:%M')}", 0, 1, 'C')
+        pdf.ln(8)
+        
+        # Customer Information
+        pdf.set_font('Arial', 'B', 14)
+        pdf.cell(0, 8, "Customer Information", 0, 1)
+        pdf.set_font('Arial', '', 11)
+        pdf.cell(0, 7, f"Name: {sanitize_text(customer_info.get('name', 'N/A'))}", 0, 1)
+        pdf.cell(0, 7, f"Phone: {sanitize_text(customer_info.get('phone', 'N/A'))}", 0, 1)
+        pdf.cell(0, 7, f"Address: {sanitize_text(customer_info.get('address', 'N/A'))}", 0, 1)
+        pdf.ln(8)
+        
+        # Loan Details Table
+        for idx, loan in enumerate(loans, 1):
+            if idx > 1:
+                pdf.ln(8)
+            
+            # Check if we need a new page
+            if pdf.get_y() > 240:
+                pdf.add_page()
+            
+            pdf.set_font('Arial', 'B', 13)
+            pdf.set_fill_color(200, 220, 255)
+            pdf.cell(0, 8, f"Loan #{idx}", 0, 1, 'L', True)
+            pdf.ln(3)
+            
+            # Loan Details Table Header
+            pdf.set_font('Arial', 'B', 9)
+            pdf.set_fill_color(70, 130, 180)
+            pdf.set_text_color(255, 255, 255)
+            
+            loan_col_widths = [30, 45, 35, 35, 45]
+            loan_headers = ['Date', 'Reference ID', 'Weight (g)', 'Amount', 'Due']
+            
+            for i, header in enumerate(loan_headers):
+                pdf.cell(loan_col_widths[i], 7, header, 1, 0, 'C', True)
+            pdf.ln()
+            
+            # Loan Details Data
+            pdf.set_font('Arial', '', 9)
+            pdf.set_text_color(0, 0, 0)
+            pdf.set_fill_color(255, 255, 255)
+            
+            try:
+                loan_date = datetime.strptime(str(loan[0]).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d").strftime('%d-%m-%Y')
+            except:
+                loan_date = "Invalid"
+            
+            ref_id = sanitize_text(str(loan[6]) if loan[6] else "N/A")[:25]
+            weight = f"{float(loan[2]):.2f}" if loan[2] else "0"
+            loan_amount = format_indian_currency(float(loan[3]) if loan[3] else 0)
+            due_amount = format_indian_currency(float(loan[4]) if loan[4] else 0)
+            
+            pdf.cell(loan_col_widths[0], 7, loan_date, 1, 0, 'C', True)
+            pdf.cell(loan_col_widths[1], 7, ref_id, 1, 0, 'L', True)
+            pdf.cell(loan_col_widths[2], 7, weight, 1, 0, 'R', True)
+            pdf.cell(loan_col_widths[3], 7, loan_amount, 1, 0, 'R', True)
+            pdf.cell(loan_col_widths[4], 7, due_amount, 1, 0, 'R', True)
+            pdf.ln()
+            
+            # Assets Table
+            pdf.ln(3)
+            pdf.set_font('Arial', 'B', 11)
+            pdf.cell(0, 6, "Assets:", 0, 1)
+            
+            assets = DatabaseManager.fetch_loan_assets(loan[7])
+            if assets:
+                # Assets Table Header
+                pdf.set_font('Arial', 'B', 9)
+                pdf.set_fill_color(70, 130, 180)
+                pdf.set_text_color(255, 255, 255)
+                
+                asset_col_widths = [140, 50]
+                asset_headers = ['Description', 'Weight (g)']
+                
+                for i, header in enumerate(asset_headers):
+                    pdf.cell(asset_col_widths[i], 7, header, 1, 0, 'C', True)
+                pdf.ln()
+                
+                # Assets Data
+                pdf.set_font('Arial', '', 9)
+                pdf.set_text_color(0, 0, 0)
+                
+                fill = False
+                for desc, weight in assets:
+                    if fill:
+                        pdf.set_fill_color(240, 240, 240)
+                    else:
+                        pdf.set_fill_color(255, 255, 255)
+                    
+                    asset_desc = sanitize_text(str(desc))[:60]
+                    pdf.cell(asset_col_widths[0], 6, asset_desc, 1, 0, 'L', True)
+                    pdf.cell(asset_col_widths[1], 6, str(weight), 1, 0, 'R', True)
+                    pdf.ln()
+                    fill = not fill
+                    
+                    # Check for page break
+                    if pdf.get_y() > 270:
+                        pdf.add_page()
+            else:
+                pdf.set_font('Arial', 'I', 9)
+                pdf.cell(0, 6, "No assets found", 0, 1)
+            
+            # Payment History Table
+            pdf.ln(3)
+            pdf.set_font('Arial', 'B', 11)
+            pdf.cell(0, 6, "Payment History:", 0, 1)
+            
+            payments = DatabaseManager.fetch_loan_payments(loan[7])
+            if payments:
+                # Sort payments by date (most recent first)
+                payments = sorted(payments, key=lambda p: datetime.strptime(str(p['payment_date']).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d"), reverse=True)
+                
+                # Payment Table Header
+                pdf.set_font('Arial', 'B', 9)
+                pdf.set_fill_color(70, 130, 180)
+                pdf.set_text_color(255, 255, 255)
+                
+                payment_col_widths = [30, 50, 50, 60]
+                payment_headers = ['Date', 'Amount', 'Interest', 'Mode']
+                
+                for i, header in enumerate(payment_headers):
+                    pdf.cell(payment_col_widths[i], 7, header, 1, 0, 'C', True)
+                pdf.ln()
+                
+                # Payment Data
+                pdf.set_font('Arial', '', 9)
+                pdf.set_text_color(0, 0, 0)
+                
+                fill = False
+                for payment in payments:
+                    if fill:
+                        pdf.set_fill_color(240, 240, 240)
+                    else:
+                        pdf.set_fill_color(255, 255, 255)
+                    
+                    try:
+                        payment_date = datetime.strptime(str(payment['payment_date']).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d").strftime('%d-%m-%Y')
+                    except:
+                        payment_date = "Invalid"
+                    
+                    payment_amt = format_indian_currency(float(payment['payment_amount']) if payment['payment_amount'] else 0)
+                    interest_amt = format_indian_currency(float(payment['interest_amount']) if payment['interest_amount'] else 0)
+                    payment_mode = sanitize_text(str(payment['payment_mode']) if payment['payment_mode'] else "N/A")[:25]
+                    
+                    pdf.cell(payment_col_widths[0], 6, payment_date, 1, 0, 'C', True)
+                    pdf.cell(payment_col_widths[1], 6, payment_amt, 1, 0, 'R', True)
+                    pdf.cell(payment_col_widths[2], 6, interest_amt, 1, 0, 'R', True)
+                    pdf.cell(payment_col_widths[3], 6, payment_mode, 1, 0, 'L', True)
+                    pdf.ln()
+                    fill = not fill
+                    
+                    # Check for page break
+                    if pdf.get_y() > 270:
+                        pdf.add_page()
+            else:
+                pdf.set_font('Arial', 'I', 9)
+                pdf.cell(0, 6, "No payments recorded", 0, 1)
+        
+        # Generate filename
+        safe_name = ''.join(char for char in str(customer_info.get('name', 'unknown')) if char.isalnum() or char in ' _-')
+        if not safe_name or safe_name.isspace():
+            safe_name = "unknown"
+        
+        if self.selected_year:
+            filename = f"customer_{safe_name}_{self.selected_year}_{datetime.now().strftime('%Y%m%d')}.pdf"
+        else:
+            filename = f"customer_{safe_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
+        
+        try:
+            pdf.output(filename)
+            QMessageBox.information(self, "Success", f"Report generated: {filename}")
+        except Exception as output_error:
+            safe_filename = f"customer_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+            pdf.output(safe_filename)
+            QMessageBox.information(self, "Success", f"Report generated: {safe_filename}")
