@@ -41,17 +41,22 @@ class GenerateReport(StyledWidget):
     def on_report_type_changed(self, index):
         """Handle report type selection change"""
         is_individual = index == 1  # 1 = Individual
-        self.customer_search.setEnabled(True)
-        self.customer_dropdown.setEnabled(True)
+        
+        # Enable/disable customer search and dropdown based on report type
+        self.customer_search.setEnabled(is_individual)
+        self.customer_dropdown.setEnabled(is_individual)
         
         if is_individual:
             if self.customer_dropdown.count() <= 1:  # Only has "Select a customer"
                 self.populate_customer_dropdown()
-        
-        # Reset customer selection when switching to All Records
-        if not is_individual:
+        else:
+            # Reset customer selection when switching to All Records
             self.customer_dropdown.setCurrentIndex(0)
             self.selected_customer_id = None
+            # Clear any existing search text
+            self.customer_search.clear()
+            # Clear the all_loans_cache to remove any customer filtering
+            self.all_loans_cache = []
         
         # Update UI
         self.customer_info_group.setVisible(False)
@@ -742,11 +747,13 @@ class GenerateReport(StyledWidget):
             self.year_dropdown.setVisible(True)
             self.date_range_group.setVisible(False)
             
-            # Reset customer selection
+            # Reset and disable customer selection (since All Records is default)
             self.populate_customer_dropdown()
             self.customer_dropdown.setCurrentIndex(0)
             self.selected_customer_id = None
             self.customer_search.clear()
+            self.customer_search.setEnabled(False)
+            self.customer_dropdown.setEnabled(False)
             
             # Re-enable signals
             self.report_type_group.blockSignals(False)
