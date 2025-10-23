@@ -1087,180 +1087,101 @@ class GenerateReport(StyledWidget):
             QMessageBox.warning(self, "No Data", "No loans found for this customer.")
             return
         
-        # Title
+        # Title with customer name
         pdf.set_font('Arial', 'B', 18)
-        pdf.cell(0, 12, "CUSTOMER LOAN REPORT", 0, 1, 'C')
-        pdf.ln(3)
+        pdf.cell(0, 12, f"LOAN REPORT - {sanitize_text(customer_info.get('name', 'N/A'))}", 0, 1, 'C')
+        pdf.ln(5)
         
         # Filter information
-        pdf.set_font('Arial', 'B', 11)
+        pdf.set_font('Arial', 'B', 12)
         if self.selected_year:
-            pdf.cell(0, 7, f"Year: {self.selected_year}", 0, 1, 'C')
+            pdf.cell(0, 8, f"Year: {self.selected_year}", 0, 1, 'C')
         else:
             start_display = datetime.strptime(self.start_date, "%Y-%m-%d").strftime("%d-%m-%Y")
             end_display = datetime.strptime(self.end_date, "%Y-%m-%d").strftime("%d-%m-%Y")
-            pdf.cell(0, 7, f"Date Range: {start_display} to {end_display}", 0, 1, 'C')
+            pdf.cell(0, 8, f"Date Range: {start_display} to {end_display}", 0, 1, 'C')
         
-        pdf.ln(2)
+        pdf.ln(3)
         pdf.set_font('Arial', 'I', 10)
         pdf.cell(0, 6, f"Generated on: {datetime.now().strftime('%d-%m-%Y %H:%M')}", 0, 1, 'C')
         pdf.ln(8)
         
         # Customer Information
-        pdf.set_font('Arial', 'B', 14)
-        pdf.cell(0, 8, "Customer Information", 0, 1)
+        pdf.set_font('Arial', 'B', 12)
+        pdf.cell(0, 7, "Customer Information", 0, 1)
         pdf.set_font('Arial', '', 11)
-        pdf.cell(0, 7, f"Name: {sanitize_text(customer_info.get('name', 'N/A'))}", 0, 1)
         pdf.cell(0, 7, f"Phone: {sanitize_text(customer_info.get('phone', 'N/A'))}", 0, 1)
         pdf.cell(0, 7, f"Address: {sanitize_text(customer_info.get('address', 'N/A'))}", 0, 1)
         pdf.ln(8)
         
-        # Loan Details Table
-        for idx, loan in enumerate(loans, 1):
-            if idx > 1:
-                pdf.ln(8)
-            
-            # Check if we need a new page
-            if pdf.get_y() > 240:
-                pdf.add_page()
-            
-            pdf.set_font('Arial', 'B', 13)
-            pdf.set_fill_color(200, 220, 255)
-            pdf.cell(0, 8, f"Loan #{idx}", 0, 1, 'L', True)
-            pdf.ln(3)
-            
-            # Loan Details Table Header
-            pdf.set_font('Arial', 'B', 9)
-            pdf.set_fill_color(70, 130, 180)
-            pdf.set_text_color(255, 255, 255)
-            
-            loan_col_widths = [30, 45, 35, 35, 45]
-            loan_headers = ['Date', 'Reference ID', 'Weight (g)', 'Amount', 'Due']
-            
-            for i, header in enumerate(loan_headers):
-                pdf.cell(loan_col_widths[i], 7, header, 1, 0, 'C', True)
-            pdf.ln()
-            
-            # Loan Details Data
-            pdf.set_font('Arial', '', 9)
-            pdf.set_text_color(0, 0, 0)
-            pdf.set_fill_color(255, 255, 255)
-            
+        # Summary statistics
+        total_loan_amount = sum(float(loan[3]) if loan[3] else 0 for loan in loans)
+        total_due_amount = sum(float(loan[4]) if loan[4] else 0 for loan in loans)
+        
+        pdf.set_font('Arial', 'B', 11)
+        pdf.cell(0, 7, f"Total Loans: {len(loans)}", 0, 1)
+        pdf.cell(0, 7, f"Total Loan Amount: Rs {format_indian_currency(total_loan_amount)}", 0, 1)
+        pdf.cell(0, 7, f"Total Amount Due: Rs {format_indian_currency(total_due_amount)}", 0, 1)
+        pdf.ln(8)
+        
+        # Table header
+        pdf.set_font('Arial', 'B', 9)
+        pdf.set_fill_color(70, 130, 180)  # Steel blue
+        pdf.set_text_color(255, 255, 255)  # White text
+        
+        # Column widths (without customer column)
+        col_widths = [25, 35, 45, 25, 25, 25]
+        headers = ['Date', 'Ref ID', 'Assets', 'Weight(g)', 'Amount', 'Due']
+        
+        for i, header in enumerate(headers):
+            pdf.cell(col_widths[i], 8, header, 1, 0, 'C', True)
+        pdf.ln()
+        
+        # Table data
+        pdf.set_font('Arial', '', 8)
+        pdf.set_text_color(0, 0, 0)  # Black text
+        
+        fill = False
+        for loan in loans:
             try:
-                loan_date = datetime.strptime(str(loan[0]).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d").strftime('%d-%m-%Y')
+                loan_date = datetime.strptime(str(loan[0]).replace('00:00:00', '').strip(), "%Y-%m-%d").strftime("%d-%m-%Y")
             except:
-                loan_date = "Invalid"
+                loan_date = str(loan[0])[:10]
             
-            ref_id = sanitize_text(str(loan[6]) if loan[6] else "N/A")[:25]
+            ref_id = sanitize_text(str(loan[6]) if loan[6] else "")[:15]
+            assets = sanitize_text(str(loan[1]) if loan[1] else "")[:20]
             weight = f"{float(loan[2]):.2f}" if loan[2] else "0"
-            loan_amount = format_indian_currency(float(loan[3]) if loan[3] else 0)
-            due_amount = format_indian_currency(float(loan[4]) if loan[4] else 0)
+            amount = format_indian_currency(float(loan[3]) if loan[3] else 0)
+            due = format_indian_currency(float(loan[4]) if loan[4] else 0)
             
-            pdf.cell(loan_col_widths[0], 7, loan_date, 1, 0, 'C', True)
-            pdf.cell(loan_col_widths[1], 7, ref_id, 1, 0, 'L', True)
-            pdf.cell(loan_col_widths[2], 7, weight, 1, 0, 'R', True)
-            pdf.cell(loan_col_widths[3], 7, loan_amount, 1, 0, 'R', True)
-            pdf.cell(loan_col_widths[4], 7, due_amount, 1, 0, 'R', True)
+            # Alternate row colors
+            if fill:
+                pdf.set_fill_color(240, 240, 240)
+            else:
+                pdf.set_fill_color(255, 255, 255)
+            
+            pdf.cell(col_widths[0], 7, loan_date, 1, 0, 'C', True)
+            pdf.cell(col_widths[1], 7, ref_id, 1, 0, 'L', True)
+            pdf.cell(col_widths[2], 7, assets, 1, 0, 'L', True)
+            pdf.cell(col_widths[3], 7, weight, 1, 0, 'R', True)
+            pdf.cell(col_widths[4], 7, amount, 1, 0, 'R', True)
+            pdf.cell(col_widths[5], 7, due, 1, 0, 'R', True)
             pdf.ln()
             
-            # Assets Table
-            pdf.ln(3)
-            pdf.set_font('Arial', 'B', 11)
-            pdf.cell(0, 6, "Assets:", 0, 1)
+            fill = not fill
             
-            assets = DatabaseManager.fetch_loan_assets(loan[7])
-            if assets:
-                # Assets Table Header
+            # Add new page if needed
+            if pdf.get_y() > 270:
+                pdf.add_page()
+                # Repeat header
                 pdf.set_font('Arial', 'B', 9)
                 pdf.set_fill_color(70, 130, 180)
                 pdf.set_text_color(255, 255, 255)
-                
-                asset_col_widths = [140, 50]
-                asset_headers = ['Description', 'Weight (g)']
-                
-                for i, header in enumerate(asset_headers):
-                    pdf.cell(asset_col_widths[i], 7, header, 1, 0, 'C', True)
+                for i, header in enumerate(headers):
+                    pdf.cell(col_widths[i], 8, header, 1, 0, 'C', True)
                 pdf.ln()
-                
-                # Assets Data
-                pdf.set_font('Arial', '', 9)
+                pdf.set_font('Arial', '', 8)
                 pdf.set_text_color(0, 0, 0)
-                
-                fill = False
-                for desc, weight in assets:
-                    if fill:
-                        pdf.set_fill_color(240, 240, 240)
-                    else:
-                        pdf.set_fill_color(255, 255, 255)
-                    
-                    asset_desc = sanitize_text(str(desc))[:60]
-                    pdf.cell(asset_col_widths[0], 6, asset_desc, 1, 0, 'L', True)
-                    pdf.cell(asset_col_widths[1], 6, str(weight), 1, 0, 'R', True)
-                    pdf.ln()
-                    fill = not fill
-                    
-                    # Check for page break
-                    if pdf.get_y() > 270:
-                        pdf.add_page()
-            else:
-                pdf.set_font('Arial', 'I', 9)
-                pdf.cell(0, 6, "No assets found", 0, 1)
-            
-            # Payment History Table
-            pdf.ln(3)
-            pdf.set_font('Arial', 'B', 11)
-            pdf.cell(0, 6, "Payment History:", 0, 1)
-            
-            payments = DatabaseManager.fetch_loan_payments(loan[7])
-            if payments:
-                # Sort payments by date (most recent first)
-                payments = sorted(payments, key=lambda p: datetime.strptime(str(p['payment_date']).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d"), reverse=True)
-                
-                # Payment Table Header
-                pdf.set_font('Arial', 'B', 9)
-                pdf.set_fill_color(70, 130, 180)
-                pdf.set_text_color(255, 255, 255)
-                
-                payment_col_widths = [30, 50, 50, 60]
-                payment_headers = ['Date', 'Amount', 'Interest', 'Mode']
-                
-                for i, header in enumerate(payment_headers):
-                    pdf.cell(payment_col_widths[i], 7, header, 1, 0, 'C', True)
-                pdf.ln()
-                
-                # Payment Data
-                pdf.set_font('Arial', '', 9)
-                pdf.set_text_color(0, 0, 0)
-                
-                fill = False
-                for payment in payments:
-                    if fill:
-                        pdf.set_fill_color(240, 240, 240)
-                    else:
-                        pdf.set_fill_color(255, 255, 255)
-                    
-                    try:
-                        payment_date = datetime.strptime(str(payment['payment_date']).replace('00:00:00', '').replace(' ', ''), "%Y-%m-%d").strftime('%d-%m-%Y')
-                    except:
-                        payment_date = "Invalid"
-                    
-                    payment_amt = format_indian_currency(float(payment['payment_amount']) if payment['payment_amount'] else 0)
-                    interest_amt = format_indian_currency(float(payment['interest_amount']) if payment['interest_amount'] else 0)
-                    payment_mode = sanitize_text(str(payment['payment_mode']) if payment['payment_mode'] else "N/A")[:25]
-                    
-                    pdf.cell(payment_col_widths[0], 6, payment_date, 1, 0, 'C', True)
-                    pdf.cell(payment_col_widths[1], 6, payment_amt, 1, 0, 'R', True)
-                    pdf.cell(payment_col_widths[2], 6, interest_amt, 1, 0, 'R', True)
-                    pdf.cell(payment_col_widths[3], 6, payment_mode, 1, 0, 'L', True)
-                    pdf.ln()
-                    fill = not fill
-                    
-                    # Check for page break
-                    if pdf.get_y() > 270:
-                        pdf.add_page()
-            else:
-                pdf.set_font('Arial', 'I', 9)
-                pdf.cell(0, 6, "No payments recorded", 0, 1)
         
         # Generate filename
         safe_name = ''.join(char for char in str(customer_info.get('name', 'unknown')) if char.isalnum() or char in ' _-')
