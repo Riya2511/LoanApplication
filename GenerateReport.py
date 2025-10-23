@@ -2,7 +2,7 @@ from PyQt5.QtCore import QEvent, Qt, QDate
 from PyQt5.QtWidgets import (
     QTableWidget, QTableWidgetItem, QVBoxLayout, QHBoxLayout, 
     QPushButton, QLabel, QGroupBox, QMessageBox, QComboBox, 
-    QLineEdit, QFormLayout, QDateEdit
+    QLineEdit, QFormLayout, QDateEdit, QWidget
 )
 from helper import StyledWidget, format_indian_currency
 from DatabaseManager import DatabaseManager
@@ -38,7 +38,96 @@ class GenerateReport(StyledWidget):
         self.loan_details_table.setVisible(False)
         self.generate_pdf_button.setEnabled(False)
 
+    def on_report_type_changed(self, index):
+        """Handle report type selection change"""
+        is_individual = index == 1  # 1 = Individual
+        self.customer_search.setEnabled(True)
+        self.customer_dropdown.setEnabled(True)
+        
+        if is_individual:
+            if self.customer_dropdown.count() <= 1:  # Only has "Select a customer"
+                self.populate_customer_dropdown()
+        
+        # Reset customer selection when switching to All Records
+        if not is_individual:
+            self.customer_dropdown.setCurrentIndex(0)
+            self.selected_customer_id = None
+        
+        # Update UI
+        self.customer_info_group.setVisible(False)
+        self.loan_details_table.setVisible(True)
+        self.update_group.setVisible(False)
+        self.generate_pdf_button.setEnabled(True)
+        
+        # Refresh the view
+        self.populate_loans_table()
+
+    def on_period_type_changed(self, index):
+        """Handle period type selection change"""
+        is_yearly = index == 0  # 0 = Yearly
+        
+        # Toggle visibility of year dropdown and date range
+        self.year_dropdown.setVisible(is_yearly)
+        self.date_range_group.setVisible(not is_yearly)
+        
+        # Reset selection
+        if is_yearly:
+            self.year_dropdown.setCurrentIndex(0)
+        else:
+            # Set date range to current year by default
+            current_date = QDate.currentDate()
+            self.start_date_edit.setDate(QDate(current_date.year(), 1, 1))
+            self.end_date_edit.setDate(current_date)
+            
+            self.start_date = self.start_date_edit.date().toString("yyyy-MM-dd")
+            self.end_date = self.end_date_edit.date().toString("yyyy-MM-dd")
+        
+        # Refresh the view
+        self.populate_loans_table()
+        
     def init_ui(self):
+        # Report Type Selection
+        report_type_layout = QHBoxLayout()
+        self.report_type_group = QComboBox()
+        self.report_type_group.addItems(["All Records", "Individual"])
+        self.report_type_group.setFixedWidth(150)
+        self.report_type_group.setStyleSheet("""
+            QComboBox {
+                font-size: 16px;
+            }
+            QComboBox QAbstractItemView {
+                font-size: 16px;
+                min-height: 30px;
+            }
+        """)
+        report_type_layout.addWidget(QLabel("Report Type:"))
+        report_type_layout.addWidget(self.report_type_group)
+        report_type_layout.addStretch(1)
+        self.content_layout.addLayout(report_type_layout)
+        
+        # Report Period Selection
+        period_type_layout = QHBoxLayout()
+        self.period_type_group = QComboBox()
+        self.period_type_group.addItems(["Yearly", "Date Range"])
+        self.period_type_group.setFixedWidth(150)
+        self.period_type_group.setStyleSheet("""
+            QComboBox {
+                font-size: 16px;
+            }
+            QComboBox QAbstractItemView {
+                font-size: 16px;
+                min-height: 30px;
+            }
+        """)
+        period_type_layout.addWidget(QLabel("Period Type:"))
+        period_type_layout.addWidget(self.period_type_group)
+        period_type_layout.addStretch(1)
+        self.content_layout.addLayout(period_type_layout)
+        
+        # Connect type selection changes
+        self.report_type_group.currentIndexChanged.connect(self.on_report_type_changed)
+        self.period_type_group.currentIndexChanged.connect(self.on_period_type_changed)
+        
         # Year Selection and Date Range
         year_layout = QHBoxLayout()
         
@@ -73,8 +162,13 @@ class GenerateReport(StyledWidget):
         
         year_layout.addSpacing(30)
         
+        # Date range group (initially hidden)
+        self.date_range_group = QWidget()
+        date_range_layout = QHBoxLayout(self.date_range_group)
+        date_range_layout.setContentsMargins(0, 0, 0, 0)
+        
         # Start Date
-        year_layout.addWidget(QLabel("Start Date:"))
+        date_range_layout.addWidget(QLabel("Start Date:"))
         self.start_date_edit = QDateEdit()
         self.start_date_edit.setCalendarPopup(True)
         self.start_date_edit.setDisplayFormat("dd-MM-yyyy")
@@ -126,12 +220,12 @@ class GenerateReport(StyledWidget):
             self.start_date = fallback_date.toString("yyyy-MM-dd")
         
         self.start_date_edit.dateChanged.connect(self.on_date_range_changed)
-        year_layout.addWidget(self.start_date_edit)
+        date_range_layout.addWidget(self.start_date_edit)
         
-        year_layout.addSpacing(10)
+        date_range_layout.addSpacing(10)
         
         # End Date
-        year_layout.addWidget(QLabel("End Date:"))
+        date_range_layout.addWidget(QLabel("End Date:"))
         self.end_date_edit = QDateEdit()
         self.end_date_edit.setCalendarPopup(True)
         self.end_date_edit.setDisplayFormat("dd-MM-yyyy")
@@ -170,11 +264,15 @@ class GenerateReport(StyledWidget):
         self.end_date = today.toString("yyyy-MM-dd")
         
         self.end_date_edit.dateChanged.connect(self.on_date_range_changed)
-        year_layout.addWidget(self.end_date_edit)
+        date_range_layout.addWidget(self.end_date_edit)
         
+        year_layout.addWidget(self.date_range_group)
         year_layout.addStretch(1)
         
         self.content_layout.addLayout(year_layout)
+        
+        # Initially hide date range and show year dropdown
+        self.date_range_group.hide()
 
         # Summary Section (Total Customers and Loan Amount Due)
         summary_layout = QVBoxLayout()
@@ -628,20 +726,31 @@ class GenerateReport(StyledWidget):
         """Handle page load event and refresh customer data."""
         if event.type() == QEvent.Show:
             # Block signals temporarily to prevent cascading calls
+            self.report_type_group.blockSignals(True)
+            self.period_type_group.blockSignals(True)
             self.year_dropdown.blockSignals(True)
             self.customer_dropdown.blockSignals(True)
             self.customer_search.blockSignals(True)
             
-            # Reset year selection to All Years
-            self.year_dropdown.setCurrentIndex(0)
+            # Reset all selections
+            self.report_type_group.setCurrentIndex(0)  # All Records
+            self.period_type_group.setCurrentIndex(0)  # Yearly
+            self.year_dropdown.setCurrentIndex(0)  # All Years
             self.selected_year = None
+            
+            # Set initial visibility
+            self.year_dropdown.setVisible(True)
+            self.date_range_group.setVisible(False)
+            
+            # Reset customer selection
             self.populate_customer_dropdown()
-            # Reset selection
             self.customer_dropdown.setCurrentIndex(0)
             self.selected_customer_id = None
             self.customer_search.clear()
             
             # Re-enable signals
+            self.report_type_group.blockSignals(False)
+            self.period_type_group.blockSignals(False)
             self.year_dropdown.blockSignals(False)
             self.customer_dropdown.blockSignals(False)
             self.customer_search.blockSignals(False)
@@ -650,7 +759,7 @@ class GenerateReport(StyledWidget):
             self.current_page = 1
             self.all_loans_cache = []
             
-            # Hide customer info but show loan details table with all loans
+            # Set initial UI state
             self.customer_info_group.setVisible(False)
             self.loan_details_table.setVisible(True)
             self.update_group.setVisible(False)
@@ -700,8 +809,9 @@ class GenerateReport(StyledWidget):
         if filtered_customers:
             for customer_id, name, account_number in filtered_customers:
                 self.customer_dropdown.addItem(f"{name} - {account_number}" if account_number else f"{name}", customer_id)
-            if len(filtered_customers) == 1:
-                self.customer_dropdown.setCurrentIndex(1)  # First item after "Select Customer"
+                
+            # Don't auto-select single customer anymore
+            # Let user explicitly select it
         
         # Re-enable signals
         self.customer_dropdown.blockSignals(False)
@@ -937,16 +1047,21 @@ class GenerateReport(StyledWidget):
             except:
                 return "Text contains unsupported characters"
         
+        # Validate selection for individual report
+        if self.report_type_group.currentText() == "Individual" and not self.selected_customer_id:
+            QMessageBox.warning(self, "Invalid Selection", "Please select a customer for individual report.")
+            return
+        
         try:
             pdf = FPDF()
             pdf.add_page()
             
             # Determine report type and generate accordingly
-            if self.selected_customer_id:
-                # Scenario 3: Individual customer report
+            if self.report_type_group.currentText() == "Individual":
+                # Individual customer report
                 self.generate_customer_pdf_report(pdf, sanitize_text)
             else:
-                # Scenario 1 & 2: All loans table report
+                # All loans table report
                 self.generate_all_loans_pdf_report(pdf, sanitize_text)
                 
         except Exception as e:
@@ -973,8 +1088,11 @@ class GenerateReport(StyledWidget):
         
         # Filter information
         pdf.set_font('Arial', 'B', 12)
-        if self.selected_year:
-            pdf.cell(0, 8, f"Year: {self.selected_year}", 0, 1, 'C')
+        if self.period_type_group.currentText() == "Yearly":
+            if self.selected_year:
+                pdf.cell(0, 8, f"Year: {self.selected_year}", 0, 1, 'C')
+            else:
+                pdf.cell(0, 8, "All Years", 0, 1, 'C')
         else:
             # Show date range
             start_display = datetime.strptime(self.start_date, "%Y-%m-%d").strftime("%d-%m-%Y")
@@ -1094,8 +1212,11 @@ class GenerateReport(StyledWidget):
         
         # Filter information
         pdf.set_font('Arial', 'B', 12)
-        if self.selected_year:
-            pdf.cell(0, 8, f"Year: {self.selected_year}", 0, 1, 'C')
+        if self.period_type_group.currentText() == "Yearly":
+            if self.selected_year:
+                pdf.cell(0, 8, f"Year: {self.selected_year}", 0, 1, 'C')
+            else:
+                pdf.cell(0, 8, "All Years", 0, 1, 'C')
         else:
             start_display = datetime.strptime(self.start_date, "%Y-%m-%d").strftime("%d-%m-%Y")
             end_display = datetime.strptime(self.end_date, "%Y-%m-%d").strftime("%d-%m-%Y")
