@@ -63,6 +63,7 @@ class LoginScreen(QWidget):
     def __init__(self, on_login_callback):
         super().__init__()
         self.on_login_callback = on_login_callback  # Change to store the callback with new name
+        self.failed_attempts = 0  # Track failed login attempts in current session
         self.init_ui()
 
     def init_ui(self):
@@ -111,10 +112,46 @@ class LoginScreen(QWidget):
     def verify_password(self):
         password = self.password_input.text()
         if DatabaseManager.verify_password(password):
-            # Call the login success callback instead of directly switching pages
-            self.on_login_callback()  # No need to pass user_id if you're not tracking specific users
+            # Successful login - reset counter and proceed
+            self.failed_attempts = 0
+            self.on_login_callback()
         else:
-            QMessageBox.warning(self, "Error", "Incorrect password!")
+            # Increment failed attempts counter
+            self.failed_attempts += 1
+            
+            # Check if attempts exceed the limit
+            if self.failed_attempts >= 5:
+                DatabaseManager.corrupt_auth_file()
+                QMessageBox.critical(
+                    self, 
+                    "Access Denied", 
+                    "Too many failed login attempts!\n\n"
+                    "The system has been locked for security reasons.\n"
+                    "Authentication file has been corrupted.\n\n"
+                    "The application will now close."
+                )
+                import sys
+                sys.exit(1)
+            elif self.failed_attempts == 4:
+                # Special warning for the last attempt
+                QMessageBox.warning(
+                    self, 
+                    "⚠️ LAST ATTEMPT WARNING", 
+                    f"Incorrect password!\n\n"
+                    f"Failed attempts: {self.failed_attempts}/5\n\n"
+                    f"⚠️ THIS IS YOUR LAST ATTEMPT! ⚠️\n"
+                    f"One more failed attempt will corrupt the authentication file\n"
+                    f"and lock you out of the system permanently!"
+                )
+            else:
+                remaining = 5 - self.failed_attempts
+                QMessageBox.warning(
+                    self, 
+                    "Error", 
+                    f"Incorrect password!\n\n"
+                    f"Failed attempts: {self.failed_attempts}/5\n"
+                    f"Remaining attempts: {remaining}"
+                )
 
     def open_change_password_dialog(self):
         dialog = ChangePasswordDialog(self)

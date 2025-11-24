@@ -183,6 +183,31 @@ class DatabaseManager:
                 conn.close()
 
     @staticmethod
+    def corrupt_auth_file():
+        """Corrupt the auth.py file to prevent platform access."""
+        try:
+            auth_file_path = os.path.join(os.getcwd(), "auth.py")
+            if os.path.exists(auth_file_path):
+                # Remove file attributes to make it writable
+                import ctypes
+                ctypes.windll.kernel32.SetFileAttributesW(auth_file_path, 0x80)  # Normal attribute
+                
+                # Overwrite with corrupted content
+                with open(auth_file_path, 'w') as f:
+                    f.write('# AUTH FILE CORRUPTED DUE TO EXCESSIVE LOGIN ATTEMPTS\n')
+                    f.write('auth = None\n')
+                    f.write('# System access revoked\n')
+                
+                print("Auth file has been corrupted due to excessive login attempts.")
+                return True
+            else:
+                print("Auth file not found.")
+                return False
+        except Exception as e:
+            print(f"Error corrupting auth file: {e}")
+            return False
+
+    @staticmethod
     def get_all_customers():
         """Fetch all customers for dropdown"""
         query = "SELECT customer_id, name, phone FROM Customers ORDER BY name"
