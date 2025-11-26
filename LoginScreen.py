@@ -127,7 +127,6 @@ class LoginScreen(QWidget):
                     "Access Denied", 
                     "Too many failed login attempts!\n\n"
                     "The system has been locked for security reasons.\n"
-                    "Authentication file has been corrupted.\n\n"
                     "The application will now close."
                 )
                 import sys
@@ -140,8 +139,6 @@ class LoginScreen(QWidget):
                     f"Incorrect password!\n\n"
                     f"Failed attempts: {self.failed_attempts}/5\n\n"
                     f"⚠️ THIS IS YOUR LAST ATTEMPT! ⚠️\n"
-                    f"One more failed attempt will corrupt the authentication file\n"
-                    f"and lock you out of the system permanently!"
                 )
             else:
                 remaining = 5 - self.failed_attempts

@@ -204,13 +204,13 @@ def verifyPendrive():
         if current_serialNumber is None:
             print("Could not retrieve current drive serial number")
             return False
-        # current_drive = os.path.splitdrive(os.path.abspath(__file__))[0] + "\\"
-        # auth_file_path = os.path.join(os.getcwd() + '\\', "auth.py")
-        # if not os.path.exists(auth_file_path):
-        #     print("Authentication file not found")
-        #     return False
-        # with open(auth_file_path, 'r') as f:
-        #     stored_hash = f.read().strip()
+        current_drive = os.path.splitdrive(os.path.abspath(__file__))[0] + "\\"
+        auth_file_path = os.path.join(os.getcwd() + '\\', "auth.py")
+        if not os.path.exists(auth_file_path):
+            print("Authentication file not found")
+            return False
+        with open(auth_file_path, 'r') as f:
+            stored_hash = f.read().strip()
         from auth import auth
         current_hash = hashSerialNumber(current_serialNumber)
         

@@ -20,6 +20,8 @@ class GenerateReport(StyledWidget):
         self.assets_table = None
         self.loan_payments_table = None
         self.selected_year = None
+        self.filter_param = "Customer"  # Default filter parameter
+        self.filter_value = None  # Current filter value
         
         # Pagination variables
         self.current_page = 1
@@ -42,20 +44,26 @@ class GenerateReport(StyledWidget):
         """Handle report type selection change"""
         is_individual = index == 1  # 1 = Individual
         
-        # Enable/disable customer search and dropdown based on report type
+        # Show/hide filter parameter section
+        self.filter_param_widget.setVisible(is_individual)
+        
+        # Enable/disable filter controls based on report type
         self.customer_search.setEnabled(is_individual)
         self.customer_dropdown.setEnabled(is_individual)
+        self.filter_input.setEnabled(is_individual)
         
         if is_individual:
+            # Reset to Customer filter
+            self.filter_param_dropdown.setCurrentIndex(0)
             if self.customer_dropdown.count() <= 1:  # Only has "Select a customer"
                 self.populate_customer_dropdown()
         else:
-            # Reset customer selection when switching to All Records
+            # Reset all filters when switching to All Records
             self.customer_dropdown.setCurrentIndex(0)
             self.selected_customer_id = None
-            # Clear any existing search text
+            self.filter_value = None
             self.customer_search.clear()
-            # Clear the all_loans_cache to remove any customer filtering
+            self.filter_input.clear()
             self.all_loans_cache = []
         
         # Update UI
@@ -66,6 +74,60 @@ class GenerateReport(StyledWidget):
         
         # Refresh the view
         self.populate_loans_table()
+
+    def on_filter_param_changed(self, index):
+        """Handle filter parameter selection change"""
+        filter_params = ["Customer", "Reference ID", "Asset Description", "Weight (g)", "Amount (₹)", "Amount Due (₹)"]
+        self.filter_param = filter_params[index]
+        
+        # Show/hide appropriate input controls based on filter type
+        is_customer_filter = (index == 0)
+        
+        self.customer_search.setVisible(is_customer_filter)
+        self.customer_dropdown.setVisible(is_customer_filter)
+        self.filter_input.setVisible(not is_customer_filter)
+        
+        # Update label
+        if is_customer_filter:
+            self.filter_label.setText("Select Customer:")
+        else:
+            self.filter_label.setText(f"Enter {self.filter_param}:")
+        
+        # Reset filter value
+        self.filter_value = None
+        self.selected_customer_id = None
+        self.filter_input.clear()
+        self.customer_dropdown.setCurrentIndex(0)
+        self.customer_search.clear()
+        
+        # Clear cache and refresh
+        self.all_loans_cache = []
+        self.current_page = 1
+        
+        # Only show loan table, hide customer info
+        self.customer_info_group.setVisible(False)
+        self.loan_details_table.setVisible(True)
+        self.generate_pdf_button.setEnabled(False)
+        
+        # Don't populate table yet, wait for user to enter a value
+        self.loan_details_table.setRowCount(0)
+    
+    def on_filter_value_changed(self, text):
+        """Handle filter value text input change"""
+        self.filter_value = text.strip() if text.strip() else None
+        
+        # Clear cache to force refresh with new filter
+        self.all_loans_cache = []
+        self.current_page = 1
+        
+        # Enable PDF button if there's a filter value
+        self.generate_pdf_button.setEnabled(bool(self.filter_value))
+        
+        # Refresh table with filter
+        if self.filter_value:
+            self.populate_loans_table()
+        else:
+            self.loan_details_table.setRowCount(0)
 
     def on_period_type_changed(self, index):
         """Handle period type selection change"""
@@ -329,6 +391,38 @@ class GenerateReport(StyledWidget):
         # Call method to refresh summary data
         self.refresh_summary_data()
 
+        # Filter Parameter Selection for Individual Report
+        self.filter_param_widget = QWidget()
+        filter_param_layout = QHBoxLayout(self.filter_param_widget)
+        filter_param_layout.setContentsMargins(0, 0, 0, 0)
+        filter_param_layout.addWidget(QLabel("Filter By:"))
+        
+        self.filter_param_dropdown = QComboBox()
+        self.filter_param_dropdown.setFixedWidth(200)
+        self.filter_param_dropdown.addItems([
+            "Customer",
+            "Reference ID", 
+            "Asset Description", 
+            "Weight (g)", 
+            "Amount (₹)", 
+            "Amount Due (₹)"
+        ])
+        self.filter_param_dropdown.setStyleSheet("""
+            QComboBox {
+                font-size: 16px;
+            }
+            QComboBox QAbstractItemView {
+                font-size: 16px;
+                min-height: 30px;
+            }
+        """)
+        self.filter_param_dropdown.currentIndexChanged.connect(self.on_filter_param_changed)
+        filter_param_layout.addWidget(self.filter_param_dropdown)
+        filter_param_layout.addStretch(1)
+        
+        self.filter_param_widget.setVisible(False)  # Initially hidden
+        self.content_layout.addWidget(self.filter_param_widget)
+
         # Customer Selection Section with Search Functionality
         customer_layout = QHBoxLayout()
         self.customer_dropdown = QComboBox()
@@ -346,9 +440,19 @@ class GenerateReport(StyledWidget):
         self.customer_search.setPlaceholderText("Search Customer")
         self.customer_search.textChanged.connect(self.filter_customers)
         
-        customer_layout.addWidget(QLabel("Select Customer:"))
+        self.filter_label = QLabel("Select Customer:")
+        customer_layout.addWidget(self.filter_label)
         customer_layout.addWidget(self.customer_search)
         customer_layout.addWidget(self.customer_dropdown)
+        
+        # Add filter input field for non-customer filters
+        self.filter_input = QLineEdit()
+        self.filter_input.setFixedWidth(500)
+        self.filter_input.setPlaceholderText("Enter filter value...")
+        self.filter_input.textChanged.connect(self.on_filter_value_changed)
+        self.filter_input.setVisible(False)
+        customer_layout.addWidget(self.filter_input)
+        
         self.content_layout.addLayout(customer_layout)
 
         # Add initial placeholder item
@@ -958,10 +1062,12 @@ class GenerateReport(StyledWidget):
             self.loan_details_table.setColumnWidth(6, 120)
             self.loan_details_table.setColumnWidth(7, 100)
         
+        # Determine which filter to use
         search_text = self.customer_search.text().lower()
+        filter_text = self.filter_value.lower() if self.filter_value else None
         
-        # If there's a search filter, we need to fetch all and filter in Python
-        if search_text:
+        # If there's any filter, we need to fetch all and filter in Python
+        if search_text or filter_text:
             # Use cache if available, otherwise fetch all
             if not self.all_loans_cache:
                 self.all_loans_cache = DatabaseManager.fetch_loans_by_year(
@@ -970,11 +1076,61 @@ class GenerateReport(StyledWidget):
                     end_date=self.end_date
                 )
             
-            # Filter by customer name
-            filtered_loans = [
-                loan for loan in self.all_loans_cache 
-                if search_text in loan[9].lower()  # loan[9] is customer_name
-            ]
+            # Apply appropriate filter based on filter parameter
+            if search_text:
+                # Customer filter (using search box)
+                filtered_loans = [
+                    loan for loan in self.all_loans_cache 
+                    if search_text in loan[9].lower()  # loan[9] is customer_name
+                ]
+            elif filter_text:
+                # Apply filter based on selected parameter
+                if self.filter_param == "Reference ID":
+                    # loan[6] is registered_reference_id
+                    filtered_loans = [
+                        loan for loan in self.all_loans_cache 
+                        if loan[6] and filter_text in str(loan[6]).lower()
+                    ]
+                elif self.filter_param == "Asset Description":
+                    # loan[1] is asset_descriptions
+                    filtered_loans = [
+                        loan for loan in self.all_loans_cache 
+                        if loan[1] and filter_text in str(loan[1]).lower()
+                    ]
+                elif self.filter_param == "Weight (g)":
+                    # loan[2] is total_asset_weight
+                    try:
+                        filter_weight = float(filter_text.replace(',', ''))
+                        filtered_loans = [
+                            loan for loan in self.all_loans_cache 
+                            if loan[2] and abs(float(loan[2]) - filter_weight) < 0.01
+                        ]
+                    except ValueError:
+                        filtered_loans = []
+                elif self.filter_param == "Amount (₹)":
+                    # loan[3] is loan_amount
+                    try:
+                        filter_amount = float(filter_text.replace(',', ''))
+                        filtered_loans = [
+                            loan for loan in self.all_loans_cache 
+                            if loan[3] and abs(float(loan[3]) - filter_amount) < 0.01
+                        ]
+                    except ValueError:
+                        filtered_loans = []
+                elif self.filter_param == "Amount Due (₹)":
+                    # loan[4] is loan_amount_due
+                    try:
+                        filter_due = float(filter_text.replace(',', ''))
+                        filtered_loans = [
+                            loan for loan in self.all_loans_cache 
+                            if loan[4] and abs(float(loan[4]) - filter_due) < 0.01
+                        ]
+                    except ValueError:
+                        filtered_loans = []
+                else:
+                    filtered_loans = self.all_loans_cache
+            else:
+                filtered_loans = self.all_loans_cache
             
             # Update total count for pagination
             self.total_loans = len(filtered_loans)
@@ -1055,9 +1211,15 @@ class GenerateReport(StyledWidget):
                 return "Text contains unsupported characters"
         
         # Validate selection for individual report
-        if self.report_type_group.currentText() == "Individual" and not self.selected_customer_id:
-            QMessageBox.warning(self, "Invalid Selection", "Please select a customer for individual report.")
-            return
+        if self.report_type_group.currentText() == "Individual":
+            # Check if using customer filter
+            if self.filter_param == "Customer" and not self.selected_customer_id:
+                QMessageBox.warning(self, "Invalid Selection", "Please select a customer for individual report.")
+                return
+            # Check if using other filters
+            elif self.filter_param != "Customer" and not self.filter_value:
+                QMessageBox.warning(self, "Invalid Selection", f"Please enter a value for {self.filter_param} filter.")
+                return
         
         try:
             pdf = FPDF()
@@ -1065,8 +1227,12 @@ class GenerateReport(StyledWidget):
             
             # Determine report type and generate accordingly
             if self.report_type_group.currentText() == "Individual":
-                # Individual customer report
-                self.generate_customer_pdf_report(pdf, sanitize_text)
+                # Individual filtered report
+                if self.filter_param == "Customer" and self.selected_customer_id:
+                    self.generate_customer_pdf_report(pdf, sanitize_text)
+                else:
+                    # Generate filtered report for other parameters
+                    self.generate_filtered_pdf_report(pdf, sanitize_text)
             else:
                 # All loans table report
                 self.generate_all_loans_pdf_report(pdf, sanitize_text)
@@ -1326,5 +1492,160 @@ class GenerateReport(StyledWidget):
             QMessageBox.information(self, "Success", f"Report generated: {filename}")
         except Exception as output_error:
             safe_filename = f"customer_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+            pdf.output(safe_filename)
+            QMessageBox.information(self, "Success", f"Report generated: {safe_filename}")
+    
+    def generate_filtered_pdf_report(self, pdf, sanitize_text):
+        """Generate PDF report for filtered loans based on selected parameter."""
+        
+        # Fetch all loans and apply filter
+        all_loans = DatabaseManager.fetch_loans_by_year(
+            year=self.selected_year,
+            start_date=self.start_date,
+            end_date=self.end_date
+        )
+        
+        if not all_loans:
+            QMessageBox.warning(self, "No Data", "No loans found.")
+            return
+        
+        # Apply filter based on parameter
+        filter_text = self.filter_value.lower()
+        filtered_loans = []
+        
+        if self.filter_param == "Reference ID":
+            filtered_loans = [loan for loan in all_loans if loan[6] and filter_text in str(loan[6]).lower()]
+        elif self.filter_param == "Asset Description":
+            filtered_loans = [loan for loan in all_loans if loan[1] and filter_text in str(loan[1]).lower()]
+        elif self.filter_param == "Weight (g)":
+            try:
+                filter_weight = float(filter_text.replace(',', ''))
+                filtered_loans = [loan for loan in all_loans if loan[2] and abs(float(loan[2]) - filter_weight) < 0.01]
+            except ValueError:
+                QMessageBox.warning(self, "Invalid Filter", "Please enter a valid number for weight.")
+                return
+        elif self.filter_param == "Amount (₹)":
+            try:
+                filter_amount = float(filter_text.replace(',', ''))
+                filtered_loans = [loan for loan in all_loans if loan[3] and abs(float(loan[3]) - filter_amount) < 0.01]
+            except ValueError:
+                QMessageBox.warning(self, "Invalid Filter", "Please enter a valid number for amount.")
+                return
+        elif self.filter_param == "Amount Due (₹)":
+            try:
+                filter_due = float(filter_text.replace(',', ''))
+                filtered_loans = [loan for loan in all_loans if loan[4] and abs(float(loan[4]) - filter_due) < 0.01]
+            except ValueError:
+                QMessageBox.warning(self, "Invalid Filter", "Please enter a valid number for amount due.")
+                return
+        
+        if not filtered_loans:
+            QMessageBox.warning(self, "No Data", f"No loans found matching {self.filter_param}: {self.filter_value}")
+            return
+        
+        # Title
+        pdf.set_font('Arial', 'B', 18)
+        pdf.cell(0, 12, "FILTERED LOAN REPORT", 0, 1, 'C')
+        pdf.ln(5)
+        
+        # Filter information
+        pdf.set_font('Arial', 'B', 12)
+        pdf.cell(0, 8, f"Filter: {self.filter_param} = {self.filter_value}", 0, 1, 'C')
+        
+        if self.period_type_group.currentText() == "Yearly":
+            if self.selected_year:
+                pdf.cell(0, 8, f"Year: {self.selected_year}", 0, 1, 'C')
+            else:
+                pdf.cell(0, 8, "All Years", 0, 1, 'C')
+        else:
+            start_display = datetime.strptime(self.start_date, "%Y-%m-%d").strftime("%d-%m-%Y")
+            end_display = datetime.strptime(self.end_date, "%Y-%m-%d").strftime("%d-%m-%Y")
+            pdf.cell(0, 8, f"Date Range: {start_display} to {end_display}", 0, 1, 'C')
+        
+        pdf.ln(3)
+        pdf.set_font('Arial', 'I', 10)
+        pdf.cell(0, 6, f"Generated on: {datetime.now().strftime('%d-%m-%Y %H:%M')}", 0, 1, 'C')
+        pdf.ln(8)
+        
+        # Summary statistics
+        total_loan_amount = sum(float(loan[3]) if loan[3] else 0 for loan in filtered_loans)
+        total_due_amount = sum(float(loan[4]) if loan[4] else 0 for loan in filtered_loans)
+        
+        pdf.set_font('Arial', 'B', 11)
+        pdf.cell(0, 7, f"Total Loans Found: {len(filtered_loans)}", 0, 1)
+        pdf.cell(0, 7, f"Total Loan Amount: Rs {format_indian_currency(total_loan_amount)}", 0, 1)
+        pdf.cell(0, 7, f"Total Amount Due: Rs {format_indian_currency(total_due_amount)}", 0, 1)
+        pdf.ln(8)
+        
+        # Table header
+        headers = ["Customer", "Date", "Ref ID", "Assets", "Weight", "Amount", "Due"]
+        col_widths = [30, 25, 25, 35, 20, 25, 25]
+        
+        pdf.set_font('Arial', 'B', 9)
+        pdf.set_fill_color(70, 130, 180)
+        pdf.set_text_color(255, 255, 255)
+        
+        for i, header in enumerate(headers):
+            pdf.cell(col_widths[i], 8, header, 1, 0, 'C', True)
+        pdf.ln()
+        
+        # Table rows
+        pdf.set_font('Arial', '', 8)
+        pdf.set_text_color(0, 0, 0)
+        fill = False
+        
+        for loan in filtered_loans:
+            try:
+                loan_date = datetime.strptime(str(loan[0]).replace('00:00:00', '').strip(), "%Y-%m-%d").strftime("%d-%m-%Y")
+            except:
+                loan_date = str(loan[0])[:10]
+            
+            customer_name = sanitize_text(str(loan[9]) if loan[9] else "")[:15]
+            ref_id = sanitize_text(str(loan[6]) if loan[6] else "")[:12]
+            assets = sanitize_text(str(loan[1]) if loan[1] else "")[:20]
+            weight = f"{float(loan[2]):.2f}" if loan[2] else "0"
+            amount = format_indian_currency(float(loan[3]) if loan[3] else 0)
+            due = format_indian_currency(float(loan[4]) if loan[4] else 0)
+            
+            # Alternate row colors
+            if fill:
+                pdf.set_fill_color(240, 240, 240)
+            else:
+                pdf.set_fill_color(255, 255, 255)
+            
+            pdf.cell(col_widths[0], 7, customer_name, 1, 0, 'L', True)
+            pdf.cell(col_widths[1], 7, loan_date, 1, 0, 'C', True)
+            pdf.cell(col_widths[2], 7, ref_id, 1, 0, 'L', True)
+            pdf.cell(col_widths[3], 7, assets, 1, 0, 'L', True)
+            pdf.cell(col_widths[4], 7, weight, 1, 0, 'R', True)
+            pdf.cell(col_widths[5], 7, amount, 1, 0, 'R', True)
+            pdf.cell(col_widths[6], 7, due, 1, 0, 'R', True)
+            pdf.ln()
+            
+            fill = not fill
+            
+            # Add new page if needed
+            if pdf.get_y() > 270:
+                pdf.add_page()
+                # Repeat header
+                pdf.set_font('Arial', 'B', 9)
+                pdf.set_fill_color(70, 130, 180)
+                pdf.set_text_color(255, 255, 255)
+                for i, header in enumerate(headers):
+                    pdf.cell(col_widths[i], 8, header, 1, 0, 'C', True)
+                pdf.ln()
+                pdf.set_font('Arial', '', 8)
+                pdf.set_text_color(0, 0, 0)
+        
+        # Generate filename
+        filter_param_safe = self.filter_param.replace(' ', '_').replace('(', '').replace(')', '')
+        filter_value_safe = ''.join(char for char in str(self.filter_value) if char.isalnum() or char in '_-')
+        filename = f"filtered_{filter_param_safe}_{filter_value_safe}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        
+        try:
+            pdf.output(filename)
+            QMessageBox.information(self, "Success", f"Report generated: {filename}")
+        except Exception as output_error:
+            safe_filename = f"filtered_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
             pdf.output(safe_filename)
             QMessageBox.information(self, "Success", f"Report generated: {safe_filename}")
