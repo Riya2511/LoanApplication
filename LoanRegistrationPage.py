@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import (QPushButton, QLineEdit, QFormLayout, QMessageBox,
 from PyQt5.QtWidgets import QDateEdit
 from PyQt5.QtCore import QDate
 from PyQt5.QtWidgets import QDateEdit, QSizePolicy
+from referenceIdManager import generate_next_reference_id, is_valid_new_pattern
 
 class LoanRegistrationPage(StyledWidget):
     def __init__(self, parent, switch_page_callback):
@@ -208,9 +209,14 @@ class LoanRegistrationPage(StyledWidget):
 
     def register_loan(self):
         try:
-            registered_reference_id = self.loan_account_input.text().strip()
-            if not registered_reference_id:
+            # Get base reference ID from user input
+            base_reference_id = self.loan_account_input.text().strip()
+            if not base_reference_id:
                 raise ValueError("Registered Reference Id cannot be empty.")
+
+            # Generate full reference ID with year and sequence
+            # registered_reference_id = generate_next_reference_id(base_reference_id)
+            registered_reference_id = base_reference_id
 
             loan_amount = self.loan_amount_input.text().strip()
             if not loan_amount:
@@ -245,7 +251,11 @@ class LoanRegistrationPage(StyledWidget):
         )
 
         if success:
-            QMessageBox.information(self, "Success", "Loan registered successfully!")
+            QMessageBox.information(
+                self, 
+                "Success", 
+                f"Loan registered successfully!\n\nGenerated Reference ID: {registered_reference_id}"
+            )
             self.reset_form()
             self.update_loans_table()
         else:
